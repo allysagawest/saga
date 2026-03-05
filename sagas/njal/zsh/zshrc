@@ -1,0 +1,5 @@
+export ZDOTDIR="$HOME/.config/saga/zsh"
+
+for file in ~/.config/saga/zsh/zsh.d/*.zsh; do
+  source "$file"
+done

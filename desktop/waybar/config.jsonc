@@ -1,0 +1,60 @@
+{
+  "layer": "top",
+  "position": "top",
+  "height": 38,
+  "margin-top": 8,
+  "margin-left": 10,
+  "margin-right": 10,
+  "modules-left": ["hyprland/workspaces", "custom/launcher"],
+  "modules-center": ["custom/cpu", "clock"],
+  "modules-right": ["custom/wifi", "custom/bluetooth", "custom/volume"],
+
+  "custom/launcher": {
+    "format": " 󱄅 ",
+    "tooltip": false,
+    "on-click": "saga launcher app"
+  },
+
+  "hyprland/workspaces": {
+    "disable-scroll": true,
+    "format": "{name}"
+  },
+
+  "custom/cpu": {
+    "exec": "saga waybar-stream cpu",
+    "return-type": "json",
+    "restart-interval": 2,
+    "tooltip": true,
+    "on-click": "saga panel toggle system_stats"
+  },
+
+  "custom/wifi": {
+    "exec": "saga waybar-stream wifi",
+    "return-type": "json",
+    "restart-interval": 2,
+    "tooltip": true,
+    "on-click": "saga panel toggle wifi_menu"
+  },
+
+  "custom/bluetooth": {
+    "exec": "saga waybar-stream bluetooth",
+    "return-type": "json",
+    "restart-interval": 2,
+    "tooltip": true,
+    "on-click": "saga panel toggle bluetooth_menu"
+  },
+
+  "custom/volume": {
+    "exec": "saga waybar-stream volume",
+    "return-type": "json",
+    "restart-interval": 2,
+    "tooltip": true,
+    "on-click": "saga panel toggle audio_menu"
+  },
+
+  "clock": {
+    "format": " {:%H:%M}",
+    "tooltip": false,
+    "on-click": "saga panel toggle control_center"
+  }
+}

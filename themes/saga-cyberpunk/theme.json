@@ -1,0 +1,33 @@
+{
+  "name": "Saga Cyberpunk",
+  "colors": {
+    "primary": "#ff2bd6",
+    "secondary": "#00eaff",
+    "accent": "#9d4edd",
+    "background": "#0b0b12",
+    "glass": "rgba(20,20,40,0.65)",
+    "text": "#ffffff",
+    "text-muted": "#a0a0b0",
+    "danger": "#ff4d6d",
+    "success": "#00f5a0"
+  },
+  "fonts": {
+    "ui": "JetBrainsMono Nerd Font",
+    "size": 13
+  },
+  "spacing": {
+    "xs": 6,
+    "sm": 10,
+    "md": 14,
+    "lg": 20
+  },
+  "ui": {
+    "radius": 12,
+    "border_size": 2,
+    "blur": 20
+  },
+  "animations": {
+    "windows": 7,
+    "workspace": 6
+  }
+}

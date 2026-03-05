@@ -1,0 +1,60 @@
+* {
+  font-family: var(--saga-font-ui), monospace;
+  font-size: var(--saga-font-size);
+  color: var(--saga-text);
+}
+
+window#waybar {
+  background: transparent;
+}
+
+.modules-left,
+.modules-center,
+.modules-right {
+  margin: var(--saga-space-sm);
+  padding: 0;
+}
+
+#workspaces,
+#custom-launcher,
+#custom-cpu,
+#custom-wifi,
+#custom-bluetooth,
+#custom-volume,
+#clock {
+  background: var(--saga-glass);
+  border: var(--saga-border-size) solid var(--saga-accent);
+  border-radius: var(--saga-radius);
+  margin: 0 var(--saga-space-xs);
+  padding: 0 var(--saga-space-sm);
+  min-height: 30px;
+  box-shadow: 0 0 16px rgba(157, 78, 221, 0.35);
+}
+
+#custom-launcher {
+  border-color: var(--saga-primary);
+}
+
+#custom-wifi {
+  border-color: var(--saga-secondary);
+}
+
+#custom-volume {
+  border-color: var(--saga-primary);
+}
+
+#clock {
+  border-color: var(--saga-accent);
+}
+
+#workspaces button {
+  color: var(--saga-text-muted);
+  border: none;
+  border-radius: calc(var(--saga-radius) - 4px);
+  padding: 0 var(--saga-space-xs);
+}
+
+#workspaces button.active {
+  color: var(--saga-text);
+  background: rgba(255, 43, 214, 0.2);
+}

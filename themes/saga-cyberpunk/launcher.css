@@ -1,0 +1,20 @@
+* {
+  font-family: var(--saga-font-ui), monospace;
+  font-size: var(--saga-font-size);
+}
+
+window {
+  background: var(--saga-glass);
+  border: var(--saga-border-size) solid var(--saga-primary);
+  border-radius: var(--saga-radius);
+  box-shadow: 0 0 26px rgba(255, 43, 214, 0.42);
+}
+
+entry {
+  background: rgba(11, 11, 18, 0.85);
+  color: var(--saga-text);
+}
+
+list row:selected {
+  background: rgba(0, 234, 255, 0.18);
+}

@@ -1,0 +1,26 @@
+:root {
+  --saga-primary: #ff2bd6;
+  --saga-secondary: #00eaff;
+  --saga-accent: #9d4edd;
+  --saga-bg: #0b0b12;
+  --saga-glass: rgba(20,20,40,0.65);
+  --saga-text: #ffffff;
+  --saga-text-muted: #a0a0b0;
+  --saga-danger: #ff4d6d;
+  --saga-success: #00f5a0;
+
+  --saga-font-ui: "JetBrainsMono Nerd Font";
+  --saga-font-size: 13px;
+
+  --saga-space-xs: 6px;
+  --saga-space-sm: 10px;
+  --saga-space-md: 14px;
+  --saga-space-lg: 20px;
+
+  --saga-radius: 12px;
+  --saga-border-size: 2px;
+  --saga-blur: 20px;
+
+  --saga-anim-windows: 7;
+  --saga-anim-workspace: 6;
+}

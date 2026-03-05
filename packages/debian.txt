@@ -1,0 +1,37 @@
+# Core desktop
+Hyprland|hyprland
+waybar|waybar
+walker|walker
+swaync-client,swaync|swaynotificationcenter,sway-notification-center
+nmcli|network-manager
+pipewire|pipewire
+wireplumber|wireplumber
+kitty|kitty
+hyprlock|hyprlock
+hypridle|hypridle
+swww|swww
+eww|eww
+xdg-desktop-portal-hyprland|xdg-desktop-portal-hyprland
+bluetoothctl|bluez
+brightnessctl|brightnessctl
+inotifywait|inotify-tools
+
+# CLI utilities
+python3|python3
+git|git
+curl|curl
+wget|wget
+rg|ripgrep
+fd,fdfind|fd-find
+bat,batcat|bat
+eza|eza
+fzf|fzf
+jq|jq
+
+# Njal module
+njal:zsh|zsh
+njal:starship|starship
+njal:zoxide|zoxide
+njal:btop|btop
+njal:lazygit|lazygit
+njal:tmux|tmux

@@ -1,0 +1,13 @@
+(defwidget bluetooth_menu_widget []
+  (box :class "panel" :orientation "v"
+    (label :class "panel-title" :text "Bluetooth")
+    (label :class "panel-row" :text "Status: ${saga_bt}")
+    (label :class "panel-row" :wrap true :limit-width 54 :text "${saga_bt_list}")
+    (entry :text {saga_bt_target} :placeholder "Device MAC" :onchange "eww update saga_bt_target='{}'")
+    (box :orientation "h" :spacing 8
+      (button :class "panel-button" :onclick "bluetoothctl power on" "Power on")
+      (button :class "panel-button" :onclick "saga bluetooth connect \"${saga_bt_target}\"" "Connect")
+      (button :class "panel-button" :onclick "saga panel refresh all" "Refresh")
+    )
+  )
+)

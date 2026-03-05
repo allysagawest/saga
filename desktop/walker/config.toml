@@ -1,0 +1,8 @@
+[ui]
+# Walker reads this file from ~/.config/walker when symlinked by Saga.
+show_search = true
+show_commands = true
+show_files = true
+
+[theme]
+css = "~/.config/walker/style.css"
