@@ -17,6 +17,7 @@ safe_remove_link "$CONFIG_DIR/waybar"
 safe_remove_link "$CONFIG_DIR/swaync"
 safe_remove_link "$CONFIG_DIR/eww"
 safe_remove_link "$CONFIG_DIR/walker"
+safe_remove_link "$CONFIG_DIR/wofi"
 
 if [[ -f "$CONFIG_DIR/saga/.saga-managed" ]]; then
   rm -rf "$CONFIG_DIR/saga"

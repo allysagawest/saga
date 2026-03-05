@@ -100,7 +100,7 @@ ln -sfn "$REPO_ROOT/desktop/hypr" "$CONFIG_DIR/hypr"
 ln -sfn "$REPO_ROOT/desktop/waybar" "$CONFIG_DIR/waybar"
 ln -sfn "$REPO_ROOT/desktop/swaync" "$CONFIG_DIR/swaync"
 ln -sfn "$REPO_ROOT/desktop/eww" "$CONFIG_DIR/eww"
-ln -sfn "$REPO_ROOT/desktop/walker" "$CONFIG_DIR/walker"
+ln -sfn "$REPO_ROOT/desktop/wofi" "$CONFIG_DIR/wofi"
 
 if [[ ! -f "$STATE_FILE" ]]; then
   cat > "$STATE_FILE" <<JSON

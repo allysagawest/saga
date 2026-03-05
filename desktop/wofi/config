@@ -1,0 +1,7 @@
+show=drun
+prompt=Saga
+width=45%
+height=50%
+location=center
+allow_images=true
+gtk_dark=true

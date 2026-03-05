@@ -10,11 +10,25 @@ window {
   box-shadow: 0 0 26px rgba(255, 43, 214, 0.42);
 }
 
-entry {
-  background: rgba(11, 11, 18, 0.85);
+#outer-box {
+  margin: var(--saga-space-sm);
+}
+
+#input {
+  margin: 0 0 var(--saga-space-sm) 0;
+  padding: var(--saga-space-sm);
+  border-radius: calc(var(--saga-radius) - 2px);
+  border: 1px solid color-mix(in srgb, var(--saga-secondary) 40%, transparent);
+  background: color-mix(in srgb, var(--saga-bg) 88%, transparent);
   color: var(--saga-text);
 }
 
-list row:selected {
-  background: rgba(0, 234, 255, 0.18);
+#entry {
+  padding: 8px 10px;
+  border-radius: 8px;
+  color: var(--saga-text);
+}
+
+#entry:selected {
+  background: color-mix(in srgb, var(--saga-secondary) 18%, transparent);
 }

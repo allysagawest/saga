@@ -29,6 +29,11 @@ SAGA_HYPR_CONFIG_SOURCE="$REPO_ROOT/desktop/hypr/hyprland.conf"
 SWAYNC_CONFIG_DIR="$HOME/.config/swaync"
 SWAYNC_CONFIG_FILE="$SWAYNC_CONFIG_DIR/config.json"
 SAGA_SWAYNC_CONFIG_SOURCE="$REPO_ROOT/desktop/swaync/config.json"
+WOFI_CONFIG_DIR="$HOME/.config/wofi"
+WOFI_CONFIG_FILE="$WOFI_CONFIG_DIR/config"
+WOFI_STYLE_FILE="$WOFI_CONFIG_DIR/style.css"
+SAGA_WOFI_CONFIG_SOURCE="$REPO_ROOT/desktop/wofi/config"
+SAGA_WOFI_STYLE_SOURCE="$REPO_ROOT/desktop/wofi/style.css"
 
 DISTRO=""
 PKG_MANAGER=""
@@ -48,6 +53,7 @@ REQUIRED_COMPONENTS=(
   "waybar|waybar"
   "SwayNotificationCenter|swaync"
   "libnotify|notify-send"
+  "wofi|wofi"
 )
 
 # Full package cleanup set for uninstall (Fedora stage).
@@ -63,6 +69,7 @@ UNINSTALL_PACKAGES=(
   kitty
   waybar
   walker
+  wofi
   eww
   SwayNotificationCenter
   swww
@@ -194,7 +201,7 @@ install_packages() {
 install_config() {
   # Keep config behavior simple:
   # copy tracked repo configs as-is into the user's config directory.
-  mkdir -p "$HYPR_CONFIG_DIR" "$SWAYNC_CONFIG_DIR" "$SAGA_SHARE_DIR" "$SAGA_CACHE_DIR"
+  mkdir -p "$HYPR_CONFIG_DIR" "$SWAYNC_CONFIG_DIR" "$WOFI_CONFIG_DIR" "$SAGA_SHARE_DIR" "$SAGA_CACHE_DIR"
   if [[ -f "$SAGA_HYPR_CONFIG_SOURCE" ]]; then
     cp "$SAGA_HYPR_CONFIG_SOURCE" "$HYPR_CONFIG_FILE"
   else
@@ -212,6 +219,23 @@ install_config() {
   fi
 
   echo "[OK] Installed config: $SWAYNC_CONFIG_FILE"
+
+  if [[ -f "$SAGA_WOFI_CONFIG_SOURCE" ]]; then
+    cp "$SAGA_WOFI_CONFIG_SOURCE" "$WOFI_CONFIG_FILE"
+  else
+    echo "[ERROR] Missing Saga wofi config: $SAGA_WOFI_CONFIG_SOURCE" >&2
+    exit 1
+  fi
+
+  if [[ -f "$SAGA_WOFI_STYLE_SOURCE" ]]; then
+    cp "$SAGA_WOFI_STYLE_SOURCE" "$WOFI_STYLE_FILE"
+  else
+    echo "[ERROR] Missing Saga wofi style: $SAGA_WOFI_STYLE_SOURCE" >&2
+    exit 1
+  fi
+
+  echo "[OK] Installed config: $WOFI_CONFIG_FILE"
+  echo "[OK] Installed config: $WOFI_STYLE_FILE"
 }
 
 ###############################################################################
@@ -313,6 +337,13 @@ doctor() {
     missing=1
   fi
 
+  if [[ -f "$WOFI_CONFIG_FILE" && -f "$WOFI_STYLE_FILE" ]]; then
+    echo "✓ wofi config present ($WOFI_CONFIG_DIR)"
+  else
+    echo "✗ wofi config missing ($WOFI_CONFIG_DIR)"
+    missing=1
+  fi
+
   if grep -Eq 'disable_hyprland_qtutils_check[[:space:]]*=[[:space:]]*true' "$HYPR_CONFIG_FILE" 2>/dev/null; then
     echo "✓ qtutils warning disabled in hyprland.conf"
   else
@@ -331,6 +362,7 @@ uninstall() {
     "$HOME/.config/hypr"
     "$HOME/.config/waybar"
     "$HOME/.config/walker"
+    "$HOME/.config/wofi"
     "$HOME/.config/eww"
     "$HOME/.config/swaync"
     "$HOME/.config/saga"

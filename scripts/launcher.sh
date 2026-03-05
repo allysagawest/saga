@@ -3,22 +3,23 @@ set -euo pipefail
 
 mode="${1:-app}"
 
-if ! command -v walker >/dev/null 2>&1; then
-  echo "error: walker is not installed" >&2
+if ! command -v wofi >/dev/null 2>&1; then
+  echo "error: wofi is not installed" >&2
   exit 1
 fi
 
 case "$mode" in
   app)
-    walker
+    wofi --show drun
     ;;
   files)
-    walker --placeholder "Search files..." --query "~/"
+    echo "info: file search mode is not enabled for wofi yet" >&2
+    exit 1
     ;;
   commands)
-    walker --placeholder "Run command..." --query ":"
+    wofi --show run
     ;;
   *)
-    walker
+    wofi --show drun
     ;;
 esac
