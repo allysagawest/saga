@@ -20,6 +20,6 @@ echo "saga dev: active theme $THEME_NAME"
 inotifywait -mr -e modify,create,delete,move "$WATCH_DIR" | \
 while read -r path action file; do
   printf '[dev] %s %s%s\n' "$action" "$path" "$file"
-  "$REPO_ROOT/cli/saga" theme apply "$THEME_NAME"
+  "$REPO_ROOT/saga" theme apply "$THEME_NAME"
   echo "[dev] reloaded theme"
 done

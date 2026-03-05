@@ -1,621 +1,337 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-SCRIPT_PATH="$(readlink -f "${BASH_SOURCE[0]}")"
-REPO_ROOT="$(cd "$(dirname "$SCRIPT_PATH")/.." && pwd)"
-SAGA_VERSION_FILE="$REPO_ROOT/VERSION"
-STATE_DIR="$HOME/.local/share/saga"
-STATE_FILE="$STATE_DIR/state.json"
-LOCAL_BIN="$HOME/.local/bin"
+SAGA_SHARE_DIR="$HOME/.local/share/saga"
+SAGA_CACHE_DIR="$HOME/.cache/saga"
+HYPR_CONFIG_DIR="$HOME/.config/hypr"
+HYPR_CONFIG_FILE="$HYPR_CONFIG_DIR/hyprland.conf"
+
+DISTRO=""
+PKG_MANAGER=""
+
+# package_label|binary_command
+REQUIRED_COMPONENTS=(
+  "hyprland|Hyprland"
+  # Future baseline additions (disabled for now):
+  # "pipewire|pipewire"
+  # "wireplumber|wireplumber"
+  # "xdg-desktop-portal-hyprland|xdg-desktop-portal-hyprland"
+  # "wl-clipboard|wl-copy"
+  # "grim|grim"
+  # "slurp|slurp"
+  # "kitty|kitty"
+)
+
+# Full package cleanup set for uninstall (Fedora stage).
+# Keep this broader than the active install set so uninstall can clean older Saga attempts too.
+UNINSTALL_PACKAGES=(
+  hyprland
+  pipewire
+  wireplumber
+  xdg-desktop-portal-hyprland
+  wl-clipboard
+  grim
+  slurp
+  kitty
+  waybar
+  walker
+  eww
+  swaynotificationcenter
+  swww
+  hyprlock
+  hypridle
+)
 
 usage() {
   cat <<USAGE
-Saga CLI
-
 Usage:
-  saga <command> [arguments]
-
-Lifecycle:
-  install [--<module>]                Install Saga desktop (optionally with module)
-  update                              Pull updates and refresh installed components
-  remove <module>                     Uninstall an installed Saga module
-  list                                Show installed modules
-  version                             Show Saga and module versions
-  doctor                              Run environment and health checks
-
-Config:
-  generate-binds                      Generate Hyprland binds from config/shortcuts.json
-  theme apply [theme-name]            Apply theme and reload UI assets
-  dev [theme-name]                    Watch themes/ and auto-apply on changes
-
-Event Bus:
-  query <metric>                      Query a one-shot metric from saga.sock
-  subscribe <event>                   Subscribe to a live event stream
-  waybar-stream <metric>              Stream metric updates as Waybar JSON
-  eww-stream                          Start EWW event listeners and state updates
-  ui-listen                           Listen for UI events (e.g., theme_reload)
-
-UI Actions:
-  panel <open|close|toggle> <name>    Manage an EWW panel window
-  panel refresh all                   Refresh panel variables from Saga state
-  panel set-volume <0-100>            Set volume and refresh panel state
-  panel set-brightness <0-100>        Set brightness and refresh panel state
-  launcher [app|files|commands]       Open Walker launcher in selected mode
-
-Device/Power:
-  wifi connect <ssid> [password]      Connect WiFi network via NetworkManager
-  bluetooth connect <device-mac>      Connect paired Bluetooth device
-  audio set-default <output-id>       Set PipeWire default output sink
-  power <lock|suspend|restart|shutdown>
-
-Examples:
-  saga install --njal
-  saga query cpu
-  saga subscribe cpu_update
-  saga panel toggle control_center
-  saga theme apply saga-cyberpunk
+  ./cli/saga install
+  ./cli/saga uninstall
+  ./cli/saga doctor
 USAGE
 }
 
-require_jq() {
-  if ! command -v jq >/dev/null 2>&1; then
-    echo "error: jq is required for this command. Run 'saga install' first." >&2
+detect_distro() {
+  if [[ ! -r /etc/os-release ]]; then
+    echo "[ERROR] Cannot detect distro: /etc/os-release not found" >&2
+    exit 1
+  fi
+
+  # shellcheck disable=SC1091
+  source /etc/os-release
+  DISTRO="${ID:-unknown}"
+
+  case "$DISTRO" in
+    fedora)
+      ;;
+    *)
+      echo "[ERROR] Unsupported distro: $DISTRO" >&2
+      echo "[INFO] Currently supported: fedora" >&2
+      exit 1
+      ;;
+  esac
+}
+
+detect_package_manager() {
+  case "$DISTRO" in
+    fedora)
+      PKG_MANAGER="dnf"
+      ;;
+    *)
+      echo "[ERROR] No package manager mapping for distro: $DISTRO" >&2
+      exit 1
+      ;;
+  esac
+
+  if ! command -v "$PKG_MANAGER" >/dev/null 2>&1; then
+    echo "[ERROR] Package manager '$PKG_MANAGER' not found" >&2
     exit 1
   fi
 }
 
-current_saga_version() {
-  cat "$SAGA_VERSION_FILE"
+is_package_installed() {
+  local pkg="$1"
+  case "$PKG_MANAGER" in
+    dnf)
+      rpm -q "$pkg" >/dev/null 2>&1
+      ;;
+    *)
+      return 1
+      ;;
+  esac
 }
 
-ensure_state_file() {
-  mkdir -p "$STATE_DIR"
-  if [[ ! -f "$STATE_FILE" ]]; then
-    cat > "$STATE_FILE" <<JSON
-{
-  "saga_version": "$(current_saga_version)",
-  "installed_modules": {},
-  "active_theme": "saga-cyberpunk"
-}
-JSON
-  fi
-}
+install_single_package() {
+  local pkg="$1"
 
-set_state_saga_version() {
-  require_jq
-  ensure_state_file
-  local version="$1"
-  local tmp
-  tmp="$(mktemp)"
-  jq --arg v "$version" '.saga_version = $v' "$STATE_FILE" > "$tmp"
-  mv "$tmp" "$STATE_FILE"
-}
-
-state_add_module() {
-  require_jq
-  ensure_state_file
-  local module="$1"
-  local version="$2"
-  local tmp
-  tmp="$(mktemp)"
-  jq --arg m "$module" --arg v "$version" '.installed_modules[$m] = $v' "$STATE_FILE" > "$tmp"
-  mv "$tmp" "$STATE_FILE"
-}
-
-state_remove_module() {
-  require_jq
-  ensure_state_file
-  local module="$1"
-  local tmp
-  tmp="$(mktemp)"
-  jq --arg m "$module" 'del(.installed_modules[$m])' "$STATE_FILE" > "$tmp"
-  mv "$tmp" "$STATE_FILE"
-}
-
-module_version_from_repo() {
-  local module="$1"
-  local vf="$REPO_ROOT/sagas/$module/VERSION"
-  [[ -f "$vf" ]] || return 1
-  cat "$vf"
-}
-
-install_module() {
-  local module="$1"
-  local install_script="$REPO_ROOT/sagas/$module/install.sh"
-
-  if [[ ! -x "$install_script" ]]; then
-    echo "error: module '$module' is unavailable or missing install script." >&2
-    exit 1
-  fi
-
-  "$install_script" "$REPO_ROOT"
-
-  local mver
-  mver="$(module_version_from_repo "$module")"
-  state_add_module "$module" "$mver"
-  echo "installed module: $module ($mver)"
-}
-
-remove_module() {
-  local module="$1"
-  local uninstall_script="$REPO_ROOT/sagas/$module/uninstall.sh"
-
-  if [[ ! -x "$uninstall_script" ]]; then
-    echo "error: module '$module' is unavailable or missing uninstall script." >&2
-    exit 1
-  fi
-
-  "$uninstall_script"
-  state_remove_module "$module"
-  echo "removed module: $module"
-}
-
-list_modules() {
-  require_jq
-  ensure_state_file
-
-  local out
-  out="$(jq -r '.installed_modules | to_entries[]? | "\(.key) \(.value)"' "$STATE_FILE")"
-
-  if [[ -z "$out" ]]; then
-    echo "No modules installed."
+  if is_package_installed "$pkg"; then
+    echo "[OK] $pkg"
     return 0
   fi
 
-  echo "$out"
+  echo "[INSTALLING] $pkg"
+  case "$PKG_MANAGER" in
+    dnf)
+      if sudo dnf install -y "$pkg" >/dev/null; then
+        echo "[OK] $pkg"
+      else
+        echo "[ERROR] Failed to install package: $pkg" >&2
+        exit 1
+      fi
+      ;;
+    *)
+      echo "[ERROR] Unsupported package manager: $PKG_MANAGER" >&2
+      exit 1
+      ;;
+  esac
 }
 
-show_version() {
-  ensure_state_file
+install_packages() {
+  local item pkg _cmd
+  for item in "${REQUIRED_COMPONENTS[@]}"; do
+    pkg="${item%%|*}"
+    _cmd="${item##*|}"
+    install_single_package "$pkg"
+  done
+}
 
-  echo "Saga $(current_saga_version)"
-  if command -v jq >/dev/null 2>&1; then
-    local theme
-    theme="$(jq -r '.active_theme // "saga-cyberpunk"' "$STATE_FILE")"
-    echo "Theme: $theme"
+install_config() {
+  mkdir -p "$HYPR_CONFIG_DIR" "$SAGA_SHARE_DIR" "$SAGA_CACHE_DIR"
 
-    local modules
-    modules="$(jq -r '.installed_modules | to_entries[]? | "- \(.key): \(.value)"' "$STATE_FILE")"
-    if [[ -n "$modules" ]]; then
-      echo "Modules:"
-      echo "$modules"
+  cat > "$HYPR_CONFIG_FILE" <<'CONF'
+monitor=,preferred,auto,1
+
+exec-once=dbus-update-activation-environment --systemd WAYLAND_DISPLAY XDG_CURRENT_DESKTOP
+
+input {
+    kb_layout = us
+}
+
+bind = SUPER, Q, killactive
+bind = SUPER, M, exit
+
+# Future stage placeholders (disabled for now):
+# bind = SUPER, RETURN, exec, kitty
+# exec-once = waybar
+# exec-once = swaync
+# exec-once = walker
+# exec-once = eww daemon
+# exec-once = swww-daemon
+# exec-once = hypridle
+CONF
+
+  echo "[OK] Installed config: $HYPR_CONFIG_FILE"
+}
+
+install_stage_bar() {
+  # Placeholder for future stage: waybar install/config
+  :
+}
+
+install_stage_notifications() {
+  # Placeholder for future stage: swaync install/config
+  :
+}
+
+install_stage_launcher() {
+  # Placeholder for future stage: launcher install/config
+  :
+}
+
+install_stage_widgets() {
+  # Placeholder for future stage: eww/widgets install/config
+  :
+}
+
+install_stage_utilities() {
+  # Placeholder for future stage: extra desktop utilities
+  :
+}
+
+install() {
+  detect_distro
+  detect_package_manager
+  install_packages
+  install_config
+
+  # Future staged installers (intentionally disabled)
+  # install_stage_bar
+  # install_stage_notifications
+  # install_stage_launcher
+  # install_stage_widgets
+  # install_stage_utilities
+
+  echo "Saga install complete"
+}
+
+doctor() {
+  local item label cmd missing=0
+
+  for item in "${REQUIRED_COMPONENTS[@]}"; do
+    label="${item%%|*}"
+    cmd="${item##*|}"
+
+    if command -v "$cmd" >/dev/null 2>&1; then
+      echo "✓ $label installed"
     else
-      echo "Modules: none"
+      echo "✗ $label missing"
+      missing=1
     fi
+  done
+
+  if [[ -f "$HYPR_CONFIG_FILE" ]]; then
+    echo "✓ hypr config present ($HYPR_CONFIG_FILE)"
   else
-    echo "Modules: unavailable (jq not installed)"
+    echo "✗ hypr config missing ($HYPR_CONFIG_FILE)"
+    missing=1
+  fi
+
+  if [[ "$missing" -ne 0 ]]; then
+    return 1
   fi
 }
 
-update_saga() {
-  ensure_state_file
+uninstall() {
+  local target confirm
+  local targets=(
+    "$HOME/.config/hypr"
+    "$HOME/.config/waybar"
+    "$HOME/.config/walker"
+    "$HOME/.config/eww"
+    "$HOME/.config/swaync"
+    "$HOME/.config/saga"
+    "$HOME/.local/share/saga"
+    "$HOME/.cache/saga"
+    "$HOME/.local/bin/saga"
+  )
+  local pkg
+  local to_remove=()
 
-  local before after
-  before="$(current_saga_version)"
+  detect_distro
+  detect_package_manager
 
-  if [[ -d "$REPO_ROOT/.git" ]]; then
-    git -C "$REPO_ROOT" pull --ff-only || true
+  for pkg in "${UNINSTALL_PACKAGES[@]}"; do
+    if is_package_installed "$pkg"; then
+      to_remove+=("$pkg")
+    fi
+  done
+
+  echo "Saga will remove the following paths:"
+  echo
+  for target in "${targets[@]}"; do
+    echo "$target"
+  done
+  echo
+  if [[ "${#to_remove[@]}" -gt 0 ]]; then
+    echo "Saga will also uninstall these system packages:"
+    echo
+    for pkg in "${to_remove[@]}"; do
+      echo "$pkg"
+    done
+    echo
   else
-    echo "warning: repository is not a git checkout; skipping git pull"
+    echo "No Saga-related system packages detected for removal."
+    echo
   fi
+  read -r -p "Continue? (y/n) " confirm
 
-  after="$(current_saga_version)"
-  set_state_saga_version "$after"
+  case "$confirm" in
+    y|Y)
+      if [[ "${#to_remove[@]}" -gt 0 ]]; then
+        echo "Removing Saga system packages..."
+        case "$PKG_MANAGER" in
+          dnf)
+            if sudo dnf remove -y "${to_remove[@]}" >/dev/null; then
+              for pkg in "${to_remove[@]}"; do
+                echo "✓ $pkg uninstalled"
+              done
+            else
+              echo "[ERROR] Failed to uninstall one or more packages" >&2
+              exit 1
+            fi
+            ;;
+          *)
+            echo "[ERROR] Unsupported package manager for uninstall: $PKG_MANAGER" >&2
+            exit 1
+            ;;
+        esac
+      fi
 
-  echo "Saga version: $before -> $after"
-
-  if ! command -v jq >/dev/null 2>&1; then
-    echo "warning: jq missing; skipping module update checks"
-    return 0
-  fi
-
-  local modules
-  modules="$(jq -r '.installed_modules | keys[]?' "$STATE_FILE")"
-
-  if [[ -z "$modules" ]]; then
-    echo "no installed modules to update"
-  else
-    while IFS= read -r mod; do
-      [[ -n "$mod" ]] || continue
-      local updater="$REPO_ROOT/sagas/$mod/update.sh"
-      local mver
-      mver="$(module_version_from_repo "$mod" 2>/dev/null || echo "unknown")"
-
-      if [[ -x "$updater" ]]; then
-        "$updater" "$REPO_ROOT"
-        if [[ "$mver" != "unknown" ]]; then
-          state_add_module "$mod" "$mver"
+      echo "Removing Saga configs..."
+      for target in "${targets[@]}"; do
+        if [[ -e "$target" ]]; then
+          rm -rf "$target"
         fi
-        echo "updated module: $mod ($mver)"
-      else
-        echo "warning: module '$mod' has no update script"
-      fi
-    done <<< "$modules"
-  fi
-
-  local theme
-  theme="$(jq -r '.active_theme // "saga-cyberpunk"' "$STATE_FILE")"
-  "$REPO_ROOT/scripts/theme-apply.sh" "$REPO_ROOT" "$theme"
-}
-
-run_doctor() {
-  local fail=0
-
-  check_ok() {
-    local label="$1"
-    local cmd="$2"
-    if eval "$cmd" >/dev/null 2>&1; then
-      printf '[OK]   %s\n' "$label"
-    else
-      printf '[WARN] %s\n' "$label"
-      fail=1
-    fi
-  }
-
-  check_ok "Hyprland installed" "command -v Hyprland"
-
-  if [[ "${XDG_SESSION_TYPE:-}" == "wayland" ]]; then
-    echo "[OK]   Wayland session available"
-  elif [[ -n "${WAYLAND_DISPLAY:-}" ]]; then
-    echo "[OK]   Wayland display variable present"
-  else
-    echo "[WARN] Wayland session not detected"
-    fail=1
-  fi
-
-  if command -v systemctl >/dev/null 2>&1; then
-    if systemctl is-active --quiet NetworkManager; then
-      echo "[OK]   NetworkManager running"
-    else
-      echo "[WARN] NetworkManager not active"
-      fail=1
-    fi
-
-    if systemctl --user is-active --quiet pipewire; then
-      echo "[OK]   PipeWire running"
-    else
-      echo "[WARN] PipeWire not active in user session"
-      fail=1
-    fi
-  else
-    echo "[WARN] systemctl not available; cannot verify services"
-    fail=1
-  fi
-
-  check_ok "Portal installed" "command -v xdg-desktop-portal-hyprland"
-  check_ok "Saga event socket available" "[[ -S \"$HOME/.local/share/saga/saga.sock\" ]]"
-
-  check_shortcut_conflicts || fail=1
-
-  if [[ "$fail" -eq 0 ]]; then
-    echo "doctor: healthy"
-  else
-    echo "doctor: issues detected"
-    return 1
-  fi
-}
-
-check_shortcut_conflicts() {
-  local shortcuts_file="$REPO_ROOT/config/shortcuts.json"
-  local has_conflict=0
-  local action shortcut norm
-
-  if [[ ! -f "$shortcuts_file" ]]; then
-    echo "[WARN] shortcuts config missing: $shortcuts_file"
-    return 1
-  fi
-
-  if ! command -v jq >/dev/null 2>&1; then
-    echo "[WARN] jq not available; skipping shortcut conflict checks"
-    return 1
-  fi
-
-  normalize_shortcut() {
-    echo "$1" | tr '[:lower:]' '[:upper:]' | tr -d ' ' | sed 's/ENTER/RETURN/g'
-  }
-
-  is_conflict() {
-    local s="$1"
-    case "$s" in
-      SUPER+Q|SUPER+RETURN|SUPER+SPACE|SUPER+S|SUPER+LEFT|SUPER+RIGHT|SUPER+UP|SUPER+DOWN|SUPER+[0-9])
-        return 0
-        ;;
-      *)
-        return 1
-        ;;
-    esac
-  }
-
-  echo "Checking Saga shortcuts..."
-  while IFS='=' read -r action shortcut; do
-    norm="$(normalize_shortcut "$shortcut")"
-    if is_conflict "$norm"; then
-      echo "$shortcut -> CONFLICT (Hyprland default)"
-      has_conflict=1
-    else
-      echo "$shortcut -> OK"
-    fi
-  done < <(jq -r 'to_entries[] | "\(.key)=\(.value)"' "$shortcuts_file")
-
-  [[ "$has_conflict" -eq 0 ]]
-}
-
-install_saga() {
-  local module=""
-  if [[ "${1:-}" == --* ]]; then
-    module="${1#--}"
-  elif [[ -n "${1:-}" ]]; then
-    echo "error: invalid install option '$1'" >&2
-    exit 1
-  fi
-
-  "$REPO_ROOT/scripts/install-desktop.sh" "$REPO_ROOT"
-
-  mkdir -p "$LOCAL_BIN"
-  ln -sfn "$REPO_ROOT/cli/saga" "$LOCAL_BIN/saga"
-  chmod +x "$REPO_ROOT/cli/saga"
-
-  ensure_state_file
-  set_state_saga_version "$(current_saga_version)"
-
-  "$REPO_ROOT/scripts/theme-apply.sh" "$REPO_ROOT" "saga-cyberpunk"
-  "$REPO_ROOT/scripts/generate-binds.sh" "$REPO_ROOT"
-
-  if command -v hyprctl >/dev/null 2>&1; then
-    hyprctl reload >/dev/null 2>&1 || true
-  fi
-
-  if [[ -n "$module" ]]; then
-    install_module "$module"
-  fi
-
-  echo "Saga install complete."
-}
-
-generate_binds() {
-  "$REPO_ROOT/scripts/generate-binds.sh" "$REPO_ROOT"
-}
-
-query_metric() {
-  local metric="${1:-}"
-  if [[ -z "$metric" ]]; then
-    echo "error: usage: saga query <metric>" >&2
-    exit 1
-  fi
-  "$REPO_ROOT/scripts/socket-client.sh" query "$metric"
-}
-
-subscribe_event() {
-  local event="${1:-}"
-  if [[ -z "$event" ]]; then
-    echo "error: usage: saga subscribe <event>" >&2
-    exit 1
-  fi
-  "$REPO_ROOT/scripts/socket-client.sh" subscribe "$event"
-}
-
-waybar_stream() {
-  local metric="${1:-}"
-  "$REPO_ROOT/scripts/waybar-stream.sh" "$metric"
-}
-
-eww_stream() {
-  "$REPO_ROOT/scripts/eww-stream.sh"
-}
-
-ui_listen() {
-  "$REPO_ROOT/scripts/ui-event-listener.sh"
-}
-
-theme_apply() {
-  local theme_name="${1:-saga-cyberpunk}"
-  "$REPO_ROOT/scripts/theme-apply.sh" "$REPO_ROOT" "$theme_name"
-}
-
-start_dev() {
-  local theme_name="${1:-saga-cyberpunk}"
-  "$REPO_ROOT/scripts/dev-watch.sh" "$REPO_ROOT" "$theme_name"
-}
-
-panel_action() {
-  local action="${1:-}"
-  local panel="${2:-}"
-  if [[ -z "$action" ]]; then
-    echo "error: panel action is required" >&2
-    exit 1
-  fi
-
-  if [[ "$action" == "refresh" ]]; then
-    "$REPO_ROOT/scripts/panel.sh" "$REPO_ROOT" refresh all
-    return 0
-  fi
-
-  if [[ "$action" == "set-volume" || "$action" == "set-brightness" ]]; then
-    "$REPO_ROOT/scripts/panel.sh" "$REPO_ROOT" "$action" "$panel"
-    return 0
-  fi
-
-  if [[ -z "$panel" ]]; then
-    echo "error: panel name is required" >&2
-    exit 1
-  fi
-
-  "$REPO_ROOT/scripts/panel.sh" "$REPO_ROOT" "$action" "$panel"
-}
-
-launcher_action() {
-  local mode="${1:-app}"
-  "$REPO_ROOT/scripts/launcher.sh" "$mode"
-}
-
-power_action() {
-  local action="${1:-}"
-  case "$action" in
-    lock)
-      hyprlock
-      ;;
-    suspend)
-      systemctl suspend
-      ;;
-    restart)
-      systemctl reboot
-      ;;
-    shutdown)
-      systemctl poweroff
+        echo "✓ $target removed"
+      done
+      echo "Saga uninstall complete"
       ;;
     *)
-      echo "error: unknown power action '$action'" >&2
+      echo "Uninstall cancelled"
+      ;;
+  esac
+}
+
+main() {
+  case "${1:-}" in
+    install)
+      install
+      ;;
+    uninstall)
+      uninstall
+      ;;
+    doctor)
+      doctor
+      ;;
+    -h|--help|help|"")
+      usage
+      ;;
+    *)
+      echo "[ERROR] Unknown command: $1" >&2
+      usage
       exit 1
       ;;
   esac
 }
 
-wifi_action() {
-  local action="${1:-}"
-  local ssid="${2:-}"
-  local password="${3:-}"
-
-  case "$action" in
-    connect)
-      if [[ -z "$ssid" ]]; then
-        echo "error: usage: saga wifi connect <ssid> [password]" >&2
-        exit 1
-      fi
-      if [[ -n "$password" ]]; then
-        nmcli dev wifi connect "$ssid" password "$password"
-      else
-        nmcli dev wifi connect "$ssid"
-      fi
-      ;;
-    *)
-      echo "error: unknown wifi action '$action'" >&2
-      exit 1
-      ;;
-  esac
-}
-
-bluetooth_action() {
-  local action="${1:-}"
-  local device="${2:-}"
-
-  case "$action" in
-    connect)
-      if [[ -z "$device" ]]; then
-        echo "error: usage: saga bluetooth connect <device-mac>" >&2
-        exit 1
-      fi
-      bluetoothctl connect "$device"
-      ;;
-    *)
-      echo "error: unknown bluetooth action '$action'" >&2
-      exit 1
-      ;;
-  esac
-}
-
-audio_action() {
-  local action="${1:-}"
-  local output_id="${2:-}"
-
-  case "$action" in
-    set-default)
-      if [[ -z "$output_id" ]]; then
-        echo "error: usage: saga audio set-default <output-id>" >&2
-        exit 1
-      fi
-      wpctl set-default "$output_id"
-      ;;
-    *)
-      echo "error: unknown audio action '$action'" >&2
-      exit 1
-      ;;
-  esac
-}
-
-cmd="${1:-}"
-case "$cmd" in
-  install)
-    shift || true
-    install_saga "${1:-}"
-    ;;
-  remove)
-    shift || true
-    module="${1:-}"
-    if [[ -z "$module" ]]; then
-      echo "error: module name required (example: saga remove njal)" >&2
-      exit 1
-    fi
-    remove_module "$module"
-    ;;
-  update)
-    update_saga
-    ;;
-  list)
-    list_modules
-    ;;
-  version)
-    show_version
-    ;;
-  doctor)
-    run_doctor
-    ;;
-  generate-binds)
-    generate_binds
-    ;;
-  query)
-    query_metric "${2:-}"
-    ;;
-  subscribe)
-    subscribe_event "${2:-}"
-    ;;
-  theme)
-    sub="${2:-}"
-    case "$sub" in
-      apply)
-        theme_apply "${3:-saga-cyberpunk}"
-        ;;
-      *)
-        echo "error: usage: saga theme apply [theme-name]" >&2
-        exit 1
-        ;;
-    esac
-    ;;
-  dev)
-    start_dev "${2:-saga-cyberpunk}"
-    ;;
-  waybar-stream)
-    waybar_stream "${2:-}"
-    ;;
-  eww-stream)
-    eww_stream
-    ;;
-  ui-listen)
-    ui_listen
-    ;;
-  panel)
-    panel_action "${2:-}" "${3:-}"
-    ;;
-  launcher)
-    launcher_action "${2:-app}"
-    ;;
-  power)
-    power_action "${2:-}"
-    ;;
-  wifi)
-    wifi_action "${2:-}" "${3:-}" "${4:-}"
-    ;;
-  bluetooth)
-    bluetooth_action "${2:-}" "${3:-}"
-    ;;
-  audio)
-    audio_action "${2:-}" "${3:-}"
-    ;;
-  ""|-h|--help|help)
-    usage
-    ;;
-  *)
-    echo "error: unknown command '$cmd'" >&2
-    usage
-    exit 1
-    ;;
-esac
+main "$@"

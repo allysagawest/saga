@@ -5,7 +5,7 @@ REPO_ROOT="$(cd "$SCRIPT_DIR/.." && pwd)"
 if command -v saga >/dev/null 2>&1; then
   SAGA_CMD=(saga)
 else
-  SAGA_CMD=("$REPO_ROOT/cli/saga")
+  SAGA_CMD=("$REPO_ROOT/saga")
 fi
 
 "${SAGA_CMD[@]}" subscribe theme_reload | while IFS=$'\t' read -r _ev _raw; do

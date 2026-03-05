@@ -28,7 +28,7 @@ It provides:
 
 Saga consists of:
 
-1. `cli/saga`
+1. `saga`
 The main user CLI (`install`, `update`, `doctor`, `theme`, `query`, `subscribe`, etc.)
 
 2. Desktop configs under `desktop/`
@@ -104,7 +104,7 @@ Optional `njal` module packages:
 ### 1. Clone and run install
 
 ```bash
-chmod +x cli/saga scripts/*.sh sagas/njal/*.sh
+chmod +x saga scripts/*.sh sagas/njal/*.sh
 ./cli/saga install
 ```
 
@@ -287,7 +287,7 @@ This watches `themes/` via `inotifywait` and reapplies/reloads on change.
 Manual validation:
 
 ```bash
-bash -n cli/saga scripts/*.sh sagas/njal/*.sh
+bash -n saga scripts/*.sh sagas/njal/*.sh
 jq empty themes/saga-cyberpunk/theme.json desktop/waybar/config.jsonc desktop/swaync/config.json
 ```
 
