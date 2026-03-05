@@ -117,9 +117,7 @@ Install with Njál module:
 During install, Saga:
 - detects distro
 - installs missing dependencies (with `sudo` package-manager calls)
-- writes state file
-- applies theme
-- generates Hyprland binds
+- copies `desktop/hypr/hyprland.conf` to `~/.config/hypr/hyprland.conf`
 - reloads Hyprland (if available)
 
 ## Command reference
@@ -127,50 +125,17 @@ During install, Saga:
 | Command | What it does |
 |---|---|
 | `saga install` | Installs the Saga desktop layer and dependencies. |
-| `saga install --njal` | Installs Saga plus the `njal` module. |
-| `saga update` | Pulls latest repo changes, updates state, refreshes installed modules, reapplies theme. |
-| `saga remove <module>` | Uninstalls a Saga module and removes it from Saga state. |
-| `saga list` | Lists installed Saga modules and versions. |
-| `saga version` | Shows Saga version, active theme, and installed modules. |
-| `saga doctor` | Runs health checks (services, Wayland, socket, portal, shortcut conflicts). |
-| `saga generate-binds` | Reads `config/shortcuts.json` and regenerates `~/.config/hypr/saga-binds.conf`. |
-| `saga theme apply [theme]` | Rebuilds theme-derived files and reloads UI components. |
-| `saga dev [theme]` | Watches `themes/` and auto-applies theme updates on file changes. |
-| `saga query <metric>` | Queries one metric from Saga daemon socket (`saga.sock`). |
-| `saga subscribe <event>` | Subscribes to a live event stream from Saga daemon. |
-| `saga waybar-stream <metric>` | Emits streaming Waybar JSON updates for custom modules. |
-| `saga eww-stream` | Starts EWW event listeners and pushes Saga state into widget vars. |
-| `saga ui-listen` | Listens for UI events (like `theme_reload`) and reloads UI processes. |
-| `saga panel toggle <panel>` | Opens/closes an EWW panel (`control_center`, `wifi_menu`, etc.). |
-| `saga panel refresh all` | Refreshes all EWW panel variables from Saga state. |
-| `saga panel set-volume <0-100>` | Sets audio volume and refreshes panel state. |
-| `saga panel set-brightness <0-100>` | Sets brightness and refreshes panel state. |
-| `saga launcher [app\\|files\\|commands]` | Opens Walker in app, file search, or command mode. |
-| `saga wifi connect <ssid> [password]` | Connects to WiFi using NetworkManager (`nmcli`). |
-| `saga bluetooth connect <mac>` | Connects to a paired Bluetooth device. |
-| `saga audio set-default <output-id>` | Sets PipeWire default output sink (`wpctl`). |
-| `saga power lock` | Locks the screen with `hyprlock`. |
-| `saga power suspend` | Suspends the system (`systemctl suspend`). |
-| `saga power restart` | Reboots the system (`systemctl reboot`). |
-| `saga power shutdown` | Powers off the system (`systemctl poweroff`). |
-
-Common event bus examples:
-
-```bash
-saga query cpu
-saga query volume
-saga subscribe cpu_update
-saga subscribe theme_reload
-```
+| `saga doctor` | Checks required binaries and Hyprland config state. |
+| `saga uninstall` | Removes Saga-managed files and Saga-installed package set. |
 
 ## Shortcuts and keybinds
 
-Central config:
-- `config/shortcuts.json`
+Configured directly in:
+- `desktop/hypr/hyprland.conf`
 
-Default bindings use conflict-safe modifier layer:
-- `SUPER + ALT + SPACE` launcher
-- `SUPER + ALT + ENTER` terminal
+Current default bindings:
+- `SUPER + T` terminal
+- `SUPER + SPACE` launcher
 - `SUPER + ALT + C` control center
 - `SUPER + ALT + N` notifications
 - `SUPER + ALT + W` wifi menu
@@ -181,10 +146,9 @@ Default bindings use conflict-safe modifier layer:
 - `SUPER + ALT + P` power menu
 - `SUPER + ALT + F` file search
 
-After editing shortcuts:
+After editing `desktop/hypr/hyprland.conf`:
 
 ```bash
-saga generate-binds
 hyprctl reload
 ```
 
@@ -253,12 +217,10 @@ saga doctor
 
 Doctor checks:
 - Hyprland command availability
-- Wayland session detection
-- NetworkManager service state
-- PipeWire user service state
-- portal command presence
-- Saga socket presence
-- shortcut conflicts against common Hyprland defaults
+- `kitty`, `swww`, `waybar` command availability
+- `~/.config/hypr/hyprland.conf` exists
+- terminal bind exists in Hypr config
+- Fedora `disable_hyprland_qtutils_check = true` is present
 
 Common issues:
 
@@ -269,7 +231,7 @@ Start `sagad` so `~/.local/share/saga/saga.sock` exists.
 Confirm event listeners are running (`saga eww-stream`, `saga ui-listen`) and daemon publishes events.
 
 3. Keybind changes not applied
-Run `saga generate-binds` then `hyprctl reload`.
+Run `./cli/saga install` again, then `hyprctl reload`.
 
 4. Package name mismatch on distro
 Edit the relevant `packages/<distro>.txt` entry and re-run install.
@@ -279,16 +241,15 @@ Edit the relevant `packages/<distro>.txt` entry and re-run install.
 Theme iteration:
 
 ```bash
-saga dev
+./cli/saga doctor
 ```
 
-This watches `themes/` via `inotifywait` and reapplies/reloads on change.
+Use this to confirm package/bin/config health.
 
 Manual validation:
 
 ```bash
-bash -n saga scripts/*.sh sagas/njal/*.sh
-jq empty themes/saga-cyberpunk/theme.json desktop/waybar/config.jsonc desktop/swaync/config.json
+bash -n cli/saga
 ```
 
 ## Repository map

@@ -1,19 +1,36 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-REPO_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+###############################################################################
+# Saga Minimal Installer (Fedora-first)
+# - Installs baseline Hyprland stack in controlled stages.
+# - Copies Saga's baseline Hypr config directly into ~/.config/hypr/hyprland.conf.
+# - Keeps uninstall targeted to Saga-related files/packages.
+###############################################################################
+
+# Resolve repository root robustly:
+# - handles direct execution: ./cli/saga
+# - handles symlinked execution: ~/.local/bin/saga -> <repo>/cli/saga
+SCRIPT_PATH="${BASH_SOURCE[0]}"
+if command -v readlink >/dev/null 2>&1; then
+  SCRIPT_PATH="$(readlink -f "$SCRIPT_PATH" 2>/dev/null || echo "$SCRIPT_PATH")"
+fi
+SCRIPT_DIR="$(cd "$(dirname "$SCRIPT_PATH")" && pwd)"
+REPO_ROOT="${SAGA_REPO_ROOT:-$(cd "$SCRIPT_DIR/.." && pwd)}"
+# Fallback for ad-hoc runs where current directory is the repo root.
+if [[ ! -f "$REPO_ROOT/desktop/hypr/hyprland.conf" && -f "$PWD/desktop/hypr/hyprland.conf" ]]; then
+  REPO_ROOT="$PWD"
+fi
 SAGA_SHARE_DIR="$HOME/.local/share/saga"
 SAGA_CACHE_DIR="$HOME/.cache/saga"
 HYPR_CONFIG_DIR="$HOME/.config/hypr"
 HYPR_CONFIG_FILE="$HYPR_CONFIG_DIR/hyprland.conf"
-HYPR_BINDS_FILE="$HYPR_CONFIG_DIR/saga-binds.conf"
-SHORTCUTS_FILE="$REPO_ROOT/config/shortcuts.json"
-HYPR_TEMPLATE_FILE="$REPO_ROOT/hyprland_default.conf"
+SAGA_HYPR_CONFIG_SOURCE="$REPO_ROOT/desktop/hypr/hyprland.conf"
 
 DISTRO=""
 PKG_MANAGER=""
 
-# package_label|binary_command
+# Package/runtime checks are represented as: package_name|command_name.
 REQUIRED_COMPONENTS=(
   "hyprland|Hyprland"
   # Future baseline additions (disabled for now):
@@ -25,6 +42,7 @@ REQUIRED_COMPONENTS=(
   # "slurp|slurp"
   "kitty|kitty"
   "swww|swww"
+  "waybar|waybar"
 )
 
 # Full package cleanup set for uninstall (Fedora stage).
@@ -56,6 +74,11 @@ Usage:
 USAGE
 }
 
+###############################################################################
+# Platform detection
+###############################################################################
+
+# Detect supported distro from /etc/os-release.
 detect_distro() {
   if [[ ! -r /etc/os-release ]]; then
     echo "[ERROR] Cannot detect distro: /etc/os-release not found" >&2
@@ -77,6 +100,7 @@ detect_distro() {
   esac
 }
 
+# Resolve package manager for current distro.
 detect_package_manager() {
   case "$DISTRO" in
     fedora)
@@ -94,6 +118,11 @@ detect_package_manager() {
   fi
 }
 
+###############################################################################
+# Package install helpers
+###############################################################################
+
+# Return success if package is already installed.
 is_package_installed() {
   local pkg="$1"
   case "$PKG_MANAGER" in
@@ -106,6 +135,28 @@ is_package_installed() {
   esac
 }
 
+# Install a package safely:
+# - skip if package metadata is unavailable
+# - warn on unknown package manager
+install_pkg() {
+  local pkg="$1"
+
+  case "$PKG_MANAGER" in
+    dnf)
+      if dnf info "$pkg" >/dev/null 2>&1; then
+        echo "[INSTALLING] $pkg"
+        sudo dnf install -y "$pkg"
+      else
+        echo "[SKIP] $pkg not available"
+      fi
+      ;;
+    *)
+      echo "[WARN] Unknown package manager"
+      ;;
+  esac
+}
+
+# Idempotent install of one package.
 install_single_package() {
   local pkg="$1"
 
@@ -114,81 +165,52 @@ install_single_package() {
     return 0
   fi
 
-  echo "[INSTALLING] $pkg"
-  case "$PKG_MANAGER" in
-    dnf)
-      if sudo dnf install -y "$pkg" >/dev/null; then
-        echo "[OK] $pkg"
-      else
-        echo "[ERROR] Failed to install package: $pkg" >&2
-        exit 1
-      fi
-      ;;
-    *)
-      echo "[ERROR] Unsupported package manager: $PKG_MANAGER" >&2
-      exit 1
-      ;;
-  esac
+  install_pkg "$pkg"
+  if is_package_installed "$pkg"; then
+    echo "[OK] $pkg"
+  else
+    echo "[SKIP] $pkg not installed"
+  fi
 }
 
+# Install all active required packages.
 install_packages() {
-  local item pkg _cmd
+  local item pkg
   for item in "${REQUIRED_COMPONENTS[@]}"; do
     pkg="${item%%|*}"
-    _cmd="${item##*|}"
     install_single_package "$pkg"
   done
 }
 
-install_config() {
-  local tmp_file
-  mkdir -p "$HYPR_CONFIG_DIR" "$SAGA_SHARE_DIR" "$SAGA_CACHE_DIR"
+###############################################################################
+# Hyprland config generation
+###############################################################################
 
-  if [[ -f "$HYPR_TEMPLATE_FILE" ]]; then
-    tmp_file="$(mktemp)"
+# Write ~/.config/hypr/hyprland.conf directly from Saga's baseline source.
+write_base_hyprland_conf() {
+  local dest="$1"
+  cat > "$dest" <<'EOF'
+# Saga baseline Hyprland config
+# This file is intentionally minimal and fully controlled by Saga.
 
-    # Build from default template while removing keys Saga owns.
-    awk '
-      BEGIN { IGNORECASE=1 }
-      # Saga-managed source/include
-      /^[[:space:]]*source[[:space:]]*=[[:space:]]*~\/\.config\/hypr\/saga-binds\.conf[[:space:]]*$/ { next }
-      # Saga-managed startup
-      /^[[:space:]]*exec-once[[:space:]]*=[[:space:]]*swww-daemon[[:space:]]*$/ { next }
-      # Remove conflicting default binds for keys Saga controls in baseline
-      /^[[:space:]]*bind[[:space:]]*=/ {
-        line = tolower($0)
-        if (line ~ /, *return *,/ || line ~ /, *q *,/ || line ~ /, *m *,/) { next }
-      }
-      { print }
-    ' "$HYPR_TEMPLATE_FILE" > "$tmp_file"
+monitor=,preferred,auto,1
 
-    {
-      cat "$tmp_file"
-      cat <<'CONF'
+# App/command variables (edit commands here)
+$terminal_app = kitty
+$launcher_app = walker
+$control_center_app = saga panel toggle control_center
+$notifications_app = swaync-client -t
+$wifi_app = saga panel toggle wifi_menu
+$bluetooth_app = saga panel toggle bluetooth_menu
+$audio_app = saga panel toggle audio_menu
+$brightness_app = saga panel toggle brightness_menu
+$system_stats_app = saga panel toggle system_stats
+$power_app = saga panel toggle power_menu
+$file_search_app = saga launcher files
 
-# --- Saga managed baseline ---
-source = ~/.config/hypr/saga-binds.conf
 exec-once=dbus-update-activation-environment --systemd WAYLAND_DISPLAY XDG_CURRENT_DESKTOP
 exec-once = swww-daemon
-bind = SUPER, Q, killactive
-bind = SUPER, M, exit
-
-# Future stage placeholders (disabled for now):
-# exec-once = waybar
-# exec-once = swaync
-# exec-once = walker
-# exec-once = eww daemon
-# exec-once = hypridle
-CONF
-    } > "$HYPR_CONFIG_FILE"
-
-    rm -f "$tmp_file"
-  else
-    cat > "$HYPR_CONFIG_FILE" <<'CONF'
-monitor=,preferred,auto,1
-source = ~/.config/hypr/saga-binds.conf
-
-exec-once=dbus-update-activation-environment --systemd WAYLAND_DISPLAY XDG_CURRENT_DESKTOP
+exec-once = waybar
 
 input {
     kb_layout = us
@@ -196,95 +218,89 @@ input {
 
 bind = SUPER, Q, killactive
 bind = SUPER, M, exit
-exec-once = swww-daemon
 
-# Future stage placeholders (disabled for now):
-# exec-once = waybar
-# exec-once = swaync
-# exec-once = walker
-# exec-once = eww daemon
-# exec-once = hypridle
-CONF
+bind = SUPER, T, exec, $terminal_app
+bind = SUPER, SPACE, exec, $launcher_app
+bind = SUPER ALT, C, exec, $control_center_app
+bind = SUPER ALT, N, exec, $notifications_app
+bind = SUPER ALT, W, exec, $wifi_app
+bind = SUPER ALT, B, exec, $bluetooth_app
+bind = SUPER ALT, V, exec, $audio_app
+bind = SUPER ALT, L, exec, $brightness_app
+bind = SUPER ALT, I, exec, $system_stats_app
+bind = SUPER ALT, P, exec, $power_app
+bind = SUPER ALT, F, exec, $file_search_app
+
+misc {
+    disable_hyprland_qtutils_check = true
+}
+EOF
+}
+
+install_config() {
+  mkdir -p "$HYPR_CONFIG_DIR" "$SAGA_SHARE_DIR" "$SAGA_CACHE_DIR"
+  if [[ -f "$SAGA_HYPR_CONFIG_SOURCE" ]]; then
+    cp "$SAGA_HYPR_CONFIG_SOURCE" "$HYPR_CONFIG_FILE"
+  else
+    echo "[WARN] Missing Saga Hyprland baseline config: $SAGA_HYPR_CONFIG_SOURCE" >&2
+    echo "[INFO] Generating base Hyprland config directly at $HYPR_CONFIG_FILE"
+    write_base_hyprland_conf "$HYPR_CONFIG_FILE"
   fi
 
   echo "[OK] Installed config: $HYPR_CONFIG_FILE"
 }
 
-shortcut_value() {
-  local key="$1"
-  local fallback="$2"
-  local value=""
+# Ensure Fedora users do not see qtutils warning if package is intentionally absent.
+ensure_fedora_qtutils_check_disabled_in_file() {
+  local config_file="$1"
+  local tmp_file in_misc inserted
 
-  if [[ -f "$SHORTCUTS_FILE" ]] && command -v jq >/dev/null 2>&1; then
-    value="$(jq -r --arg k "$key" '.[$k] // empty' "$SHORTCUTS_FILE" 2>/dev/null || true)"
+  if [[ "$DISTRO" != "fedora" || -z "$config_file" ]]; then
+    return 0
   fi
 
-  if [[ -z "$value" || "$value" == "null" ]]; then
-    echo "$fallback"
+  if [[ ! -f "$config_file" ]]; then
+    return 0
+  fi
+
+  if grep -Eq 'disable_hyprland_qtutils_check[[:space:]]*=[[:space:]]*true' "$config_file" 2>/dev/null; then
+    return 0
+  fi
+
+  if grep -Eq '^[[:space:]]*misc[[:space:]]*\{' "$config_file" 2>/dev/null; then
+    tmp_file="$(mktemp)"
+    in_misc=0
+    inserted=0
+    while IFS= read -r line; do
+      echo "$line" >> "$tmp_file"
+      if [[ "$line" =~ ^[[:space:]]*misc[[:space:]]*\{[[:space:]]*$ ]]; then
+        in_misc=1
+        continue
+      fi
+      if [[ "$in_misc" -eq 1 && "$line" =~ ^[[:space:]]*\}[[:space:]]*$ && "$inserted" -eq 0 ]]; then
+        sed -i '$d' "$tmp_file"
+        echo "    disable_hyprland_qtutils_check = true" >> "$tmp_file"
+        echo "}" >> "$tmp_file"
+        inserted=1
+        in_misc=0
+      fi
+    done < "$config_file"
+    mv "$tmp_file" "$config_file"
   else
-    echo "$value"
-  fi
-}
-
-to_hypr_bind_parts() {
-  local shortcut="$1"
-  local token key modifiers len i
-  local parts=()
-
-  IFS='+' read -ra raw_parts <<< "$shortcut"
-  for token in "${raw_parts[@]}"; do
-    token="$(echo "$token" | tr '[:lower:]' '[:upper:]' | xargs)"
-    [[ "$token" == "ENTER" ]] && token="RETURN"
-    parts+=("$token")
-  done
-
-  len="${#parts[@]}"
-  if [[ "$len" -lt 2 ]]; then
-    return 1
+    {
+      echo
+      echo "misc {"
+      echo "    disable_hyprland_qtutils_check = true"
+      echo "}"
+    } >> "$config_file"
   fi
 
-  key="${parts[$((len - 1))]}"
-  modifiers=""
-  for ((i=0; i<len-1; i++)); do
-    if [[ -z "$modifiers" ]]; then
-      modifiers="${parts[$i]}"
-    else
-      modifiers="$modifiers ${parts[$i]}"
-    fi
-  done
-
-  printf '%s|%s\n' "$modifiers" "$key"
+  echo "[OK] Fedora qtutils warning disabled in: $config_file"
 }
 
-bind_line() {
-  local shortcut="$1"
-  local command="$2"
-  local parsed modifiers key
-  parsed="$(to_hypr_bind_parts "$shortcut")" || return 1
-  modifiers="${parsed%%|*}"
-  key="${parsed##*|}"
-  printf 'bind = %s, %s, exec, %s\n' "$modifiers" "$key" "$command"
-}
-
-generate_binds() {
-  local terminal launcher notifications
-
-  terminal="$(shortcut_value terminal "SUPER+RETURN")"
-  launcher="$(shortcut_value launcher "SUPER+SPACE")"
-  notifications="$(shortcut_value notifications "SUPER+ALT+N")"
-
-  {
-    echo "# Generated by Saga"
-    echo
-    bind_line "$terminal" "kitty"
-    echo
-    # Stage placeholders written from shortcuts config (disabled until implemented):
-    echo "# $(bind_line "$launcher" "walker" 2>/dev/null || echo 'launcher shortcut invalid')"
-    echo "# $(bind_line "$notifications" "swaync-client -t" 2>/dev/null || echo 'notifications shortcut invalid')"
-  } > "$HYPR_BINDS_FILE"
-
-  echo "[OK] Installed binds: $HYPR_BINDS_FILE"
-}
+###############################################################################
+# Future stage placeholders
+###############################################################################
 
 install_stage_bar() {
   # Placeholder for future stage: waybar install/config
@@ -311,12 +327,21 @@ install_stage_utilities() {
   :
 }
 
+###############################################################################
+# Top-level commands
+###############################################################################
+
 install() {
   detect_distro
   detect_package_manager
   install_packages
   install_config
-  generate_binds
+  ensure_fedora_qtutils_check_disabled_in_file "$HYPR_CONFIG_FILE"
+
+  # Reload active Hyprland session so updated binds/config take effect immediately.
+  if command -v hyprctl >/dev/null 2>&1; then
+    hyprctl reload >/dev/null 2>&1 || true
+  fi
 
   # Future staged installers (intentionally disabled)
   # install_stage_bar
@@ -330,6 +355,8 @@ install() {
 
 doctor() {
   local item label cmd missing=0
+
+  detect_distro
 
   for item in "${REQUIRED_COMPONENTS[@]}"; do
     label="${item%%|*}"
@@ -350,17 +377,20 @@ doctor() {
     missing=1
   fi
 
-  if [[ -f "$HYPR_BINDS_FILE" ]]; then
-    echo "✓ hypr binds present ($HYPR_BINDS_FILE)"
-    if rg -q '^\s*bind\s*=.*exec,\s*kitty\s*$' "$HYPR_BINDS_FILE" 2>/dev/null; then
-      echo "✓ terminal bind present in saga-binds.conf"
+  if grep -Eq '^[[:space:]]*bind[[:space:]]*=.*\bT\b.*exec,[[:space:]]*(\$terminal_app|kitty)\b' "$HYPR_CONFIG_FILE" 2>/dev/null; then
+    echo "✓ terminal bind present in hyprland.conf"
+  else
+    echo "✗ terminal bind missing in hyprland.conf"
+    missing=1
+  fi
+
+  if [[ "$DISTRO" == "fedora" && -f "$HYPR_CONFIG_FILE" ]]; then
+    if grep -Eq 'disable_hyprland_qtutils_check[[:space:]]*=[[:space:]]*true' "$HYPR_CONFIG_FILE"; then
+      echo "✓ fedora qtutils warning disabled in ~/.config/hypr/hyprland.conf"
     else
-      echo "✗ terminal bind missing in saga-binds.conf"
+      echo "✗ fedora qtutils warning setting missing in ~/.config/hypr/hyprland.conf"
       missing=1
     fi
-  else
-    echo "✗ hypr binds missing ($HYPR_BINDS_FILE)"
-    missing=1
   fi
 
   if [[ "$missing" -ne 0 ]]; then
@@ -449,6 +479,7 @@ uninstall() {
   esac
 }
 
+# CLI entrypoint.
 main() {
   case "${1:-}" in
     install)
