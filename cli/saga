@@ -75,6 +75,7 @@ REQUIRED_COMPONENTS=(
   "hypridle|hypridle"
   "brightnessctl|brightnessctl"
   "bluez|bluetoothctl"
+  "sddm|sddm"
 )
 
 # Full package cleanup set for uninstall (Fedora stage).
@@ -97,6 +98,7 @@ UNINSTALL_PACKAGES=(
   hypridle
   brightnessctl
   bluez
+  sddm
 )
 
 usage() {
@@ -268,6 +270,39 @@ install_packages() {
 }
 
 ###############################################################################
+# Greeter (SDDM)
+###############################################################################
+
+# Install and enable SDDM with a Hyprland session entry.
+# Note: This stage writes system files under /usr and /etc because display
+# managers are system-level services.
+configure_sddm() {
+  local sddm_dir="/usr/share/wayland-sessions"
+  local sddm_session="$sddm_dir/hyprland.desktop"
+
+  if ! command -v systemctl >/dev/null 2>&1; then
+    echo "[WARN] systemctl not found; skipping SDDM enablement"
+    return 0
+  fi
+
+  echo "[INFO] Configuring SDDM for Hyprland session..."
+  sudo mkdir -p "$sddm_dir"
+
+  # Session entry visible in SDDM session picker.
+  sudo tee "$sddm_session" >/dev/null <<'EOF'
+[Desktop Entry]
+Name=Hyprland
+Comment=Hyprland Wayland Compositor
+Exec=Hyprland
+Type=Application
+DesktopNames=Hyprland
+EOF
+
+  sudo systemctl enable sddm >/dev/null
+  echo "[OK] SDDM enabled. Select 'Hyprland' at login."
+}
+
+###############################################################################
 # Config install
 ###############################################################################
 
@@ -366,6 +401,7 @@ install() {
   detect_package_manager
   install_config
   install_packages
+  configure_sddm
   apply_theme "default"
 
   # Reload active Hyprland session so updated binds/config take effect immediately.
@@ -456,6 +492,22 @@ doctor() {
     missing=1
   fi
 
+  if command -v systemctl >/dev/null 2>&1; then
+    if systemctl is-enabled sddm >/dev/null 2>&1; then
+      echo "✓ sddm service enabled"
+    else
+      echo "✗ sddm service not enabled"
+      missing=1
+    fi
+  fi
+
+  if [[ -f "/usr/share/wayland-sessions/hyprland.desktop" ]]; then
+    echo "✓ sddm Hyprland session entry present"
+  else
+    echo "✗ sddm Hyprland session entry missing"
+    missing=1
+  fi
+
   if [[ "$missing" -ne 0 ]]; then
     return 1
   fi
@@ -516,6 +568,11 @@ uninstall() {
 
   case "$confirm" in
     y|Y)
+      if command -v systemctl >/dev/null 2>&1; then
+        sudo systemctl disable sddm >/dev/null 2>&1 || true
+      fi
+      sudo rm -f /usr/share/wayland-sessions/hyprland.desktop
+
       if [[ "${#to_remove[@]}" -gt 0 ]]; then
         echo "Removing Saga system packages..."
         case "$PKG_MANAGER" in
