@@ -1,6 +1,13 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
+if [[ "${EUID:-$(id -u)}" -eq 0 ]]; then
+  echo "[ERROR] Do not run Saga as root." >&2
+  echo "[INFO] Run as your user: ./cli/saga install" >&2
+  echo "[INFO] Saga will request sudo only for package installs when needed." >&2
+  exit 1
+fi
+
 ###############################################################################
 # Saga Minimal Installer (Fedora-first)
 # - Installs baseline Hyprland stack in controlled stages.
@@ -23,6 +30,11 @@ if [[ ! -f "$REPO_ROOT/desktop/hypr/hyprland.conf" && -f "$PWD/desktop/hypr/hypr
 fi
 SAGA_SHARE_DIR="$HOME/.local/share/saga"
 SAGA_CACHE_DIR="$HOME/.cache/saga"
+SAGA_CONFIG_DIR="$HOME/.config/saga"
+SAGA_THEMES_DIR="$SAGA_CONFIG_DIR/themes"
+SAGA_WIDGETS_DIR="$SAGA_CONFIG_DIR/widgets"
+SAGA_RUNTIME_CLI="$SAGA_SHARE_DIR/bin/saga"
+SAGA_APPLY_THEME_SCRIPT="$REPO_ROOT/cli/theme/apply_theme.sh"
 HYPR_CONFIG_DIR="$HOME/.config/hypr"
 HYPR_CONFIG_FILE="$HYPR_CONFIG_DIR/hyprland.conf"
 SAGA_HYPR_CONFIG_SOURCE="$REPO_ROOT/desktop/hypr/hyprland.conf"
@@ -37,6 +49,7 @@ SAGA_WOFI_STYLE_SOURCE="$REPO_ROOT/desktop/wofi/style.css"
 
 DISTRO=""
 PKG_MANAGER=""
+APT_UPDATED=0
 
 # Package/runtime checks are represented as: package_name|command_name.
 REQUIRED_COMPONENTS=(
@@ -70,7 +83,6 @@ UNINSTALL_PACKAGES=(
   waybar
   walker
   wofi
-  eww
   SwayNotificationCenter
   mpvpaper
   hyprlock
@@ -81,6 +93,7 @@ usage() {
   cat <<USAGE
 Usage:
   ./cli/saga install
+  ./cli/saga theme <name>
   ./cli/saga uninstall
   ./cli/saga doctor
 USAGE
@@ -102,11 +115,11 @@ detect_distro() {
   DISTRO="${ID:-unknown}"
 
   case "$DISTRO" in
-    fedora)
+    fedora|arch|ubuntu|debian)
       ;;
     *)
       echo "[ERROR] Unsupported distro: $DISTRO" >&2
-      echo "[INFO] Currently supported: fedora" >&2
+      echo "[INFO] Currently supported: fedora, arch, ubuntu, debian" >&2
       exit 1
       ;;
   esac
@@ -117,6 +130,12 @@ detect_package_manager() {
   case "$DISTRO" in
     fedora)
       PKG_MANAGER="dnf"
+      ;;
+    arch)
+      PKG_MANAGER="pacman"
+      ;;
+    ubuntu|debian)
+      PKG_MANAGER="apt"
       ;;
     *)
       echo "[ERROR] No package manager mapping for distro: $DISTRO" >&2
@@ -141,6 +160,12 @@ is_package_installed() {
     dnf)
       rpm -q "$pkg" >/dev/null 2>&1
       ;;
+    pacman)
+      pacman -Q "$pkg" >/dev/null 2>&1
+      ;;
+    apt)
+      dpkg -s "$pkg" >/dev/null 2>&1
+      ;;
     *)
       return 1
       ;;
@@ -152,12 +177,46 @@ is_package_installed() {
 # - warn on unknown package manager
 install_pkg() {
   local pkg="$1"
+  local dnf_rc
 
   case "$PKG_MANAGER" in
     dnf)
-      if dnf info "$pkg" >/dev/null 2>&1; then
+      echo "[CHECKING] $pkg availability in repos..."
+      # Repo metadata checks can appear to hang on slow mirrors.
+      # Use a timeout and clear status lines so users see progress.
+      if timeout 45 dnf -q info "$pkg" >/dev/null 2>&1; then
         echo "[INSTALLING] $pkg"
         sudo dnf install -y "$pkg"
+      else
+        dnf_rc=$?
+        if [[ "$dnf_rc" -eq 124 ]]; then
+          echo "[WARN] $pkg availability check timed out (45s), trying direct install..."
+          echo "[INSTALLING] $pkg"
+          sudo dnf install -y "$pkg" || true
+        else
+          echo "[SKIP] $pkg not available"
+        fi
+      fi
+      ;;
+    pacman)
+      echo "[CHECKING] $pkg availability in repos..."
+      if timeout 45 pacman -Si "$pkg" >/dev/null 2>&1; then
+        echo "[INSTALLING] $pkg"
+        sudo pacman -S --needed --noconfirm "$pkg"
+      else
+        echo "[SKIP] $pkg not available"
+      fi
+      ;;
+    apt)
+      echo "[CHECKING] $pkg availability in repos..."
+      if [[ "$APT_UPDATED" -eq 0 ]]; then
+        echo "[INFO] refreshing apt package index..."
+        sudo apt update >/dev/null
+        APT_UPDATED=1
+      fi
+      if apt-cache show "$pkg" 2>/dev/null | grep -q '^Package:'; then
+        echo "[INSTALLING] $pkg"
+        sudo apt install -y "$pkg"
       else
         echo "[SKIP] $pkg not available"
       fi
@@ -188,8 +247,12 @@ install_single_package() {
 # Install all active required packages.
 install_packages() {
   local item pkg
+  local idx=0
+  local total="${#REQUIRED_COMPONENTS[@]}"
   for item in "${REQUIRED_COMPONENTS[@]}"; do
+    idx=$((idx + 1))
     pkg="${item%%|*}"
+    echo "[STEP $idx/$total] Resolving package: $pkg"
     install_single_package "$pkg"
   done
 }
@@ -202,6 +265,9 @@ install_config() {
   # Keep config behavior simple:
   # copy tracked repo configs as-is into the user's config directory.
   mkdir -p "$HYPR_CONFIG_DIR" "$SWAYNC_CONFIG_DIR" "$WOFI_CONFIG_DIR" "$SAGA_SHARE_DIR" "$SAGA_CACHE_DIR"
+  mkdir -p "$SAGA_SHARE_DIR/bin"
+  ln -sfn "$REPO_ROOT/cli/saga" "$SAGA_RUNTIME_CLI"
+  chmod +x "$REPO_ROOT/cli/saga" || true
   if [[ -f "$SAGA_HYPR_CONFIG_SOURCE" ]]; then
     cp "$SAGA_HYPR_CONFIG_SOURCE" "$HYPR_CONFIG_FILE"
   else
@@ -258,7 +324,7 @@ install_stage_launcher() {
 }
 
 install_stage_widgets() {
-  # Placeholder for future stage: eww/widgets install/config
+  # Placeholder for future stage: widget engine install/config
   :
 }
 
@@ -276,6 +342,7 @@ install() {
   detect_package_manager
   install_config
   install_packages
+  apply_theme "default"
 
   # Reload active Hyprland session so updated binds/config take effect immediately.
   if command -v hyprctl >/dev/null 2>&1; then
@@ -356,6 +423,15 @@ doctor() {
   fi
 }
 
+apply_theme() {
+  local theme_name="${1:-default}"
+  if [[ ! -x "$SAGA_APPLY_THEME_SCRIPT" ]]; then
+    echo "[ERROR] Missing script: $SAGA_APPLY_THEME_SCRIPT" >&2
+    exit 1
+  fi
+  "$SAGA_APPLY_THEME_SCRIPT" "$REPO_ROOT" "$theme_name"
+}
+
 uninstall() {
   local target confirm
   local targets=(
@@ -363,7 +439,6 @@ uninstall() {
     "$HOME/.config/waybar"
     "$HOME/.config/walker"
     "$HOME/.config/wofi"
-    "$HOME/.config/eww"
     "$HOME/.config/swaync"
     "$HOME/.config/saga"
     "$HOME/.local/share/saga"
@@ -416,6 +491,27 @@ uninstall() {
               exit 1
             fi
             ;;
+          pacman)
+            if sudo pacman -Rns --noconfirm "${to_remove[@]}" >/dev/null; then
+              for pkg in "${to_remove[@]}"; do
+                echo "✓ $pkg uninstalled"
+              done
+            else
+              echo "[ERROR] Failed to uninstall one or more packages" >&2
+              exit 1
+            fi
+            ;;
+          apt)
+            sudo apt update >/dev/null || true
+            if sudo apt remove -y "${to_remove[@]}" >/dev/null; then
+              for pkg in "${to_remove[@]}"; do
+                echo "✓ $pkg uninstalled"
+              done
+            else
+              echo "[ERROR] Failed to uninstall one or more packages" >&2
+              exit 1
+            fi
+            ;;
           *)
             echo "[ERROR] Unsupported package manager for uninstall: $PKG_MANAGER" >&2
             exit 1
@@ -442,7 +538,11 @@ uninstall() {
 main() {
   case "${1:-}" in
     install)
+      shift || true
       install
+      ;;
+    theme)
+      apply_theme "${2:-default}"
       ;;
     uninstall)
       uninstall

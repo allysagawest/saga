@@ -1,0 +1,10 @@
+(defwidget system_stats_widget []
+  (box :class "panel" :orientation "v"
+    (label :class "panel-title" :text "System Stats")
+    (label :class "panel-row" :text "CPU: ${saga_cpu}")
+    (label :class "panel-row" :text "Memory: ${saga_ram}")
+    (label :class "panel-row" :text "Disk: ${saga_disk}")
+    (label :class "panel-row" :text "Network: ${saga_net}")
+    (button :class "panel-button" :onclick "saga panel refresh all" "Refresh")
+  )
+)

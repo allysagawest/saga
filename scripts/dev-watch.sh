@@ -2,7 +2,7 @@
 set -euo pipefail
 
 REPO_ROOT="${1:-}"
-THEME_NAME="${2:-saga-cyberpunk}"
+THEME_NAME="${2:-default}"
 
 if [[ -z "$REPO_ROOT" ]]; then
   REPO_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
@@ -20,6 +20,6 @@ echo "saga dev: active theme $THEME_NAME"
 inotifywait -mr -e modify,create,delete,move "$WATCH_DIR" | \
 while read -r path action file; do
   printf '[dev] %s %s%s\n' "$action" "$path" "$file"
-  "$REPO_ROOT/saga" theme apply "$THEME_NAME"
+  "$REPO_ROOT/cli/saga" theme "$THEME_NAME"
   echo "[dev] reloaded theme"
 done

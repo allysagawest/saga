@@ -1,0 +1,34 @@
+* {
+  font-family: var(--saga-font-ui), monospace;
+  font-size: var(--saga-font-size);
+}
+
+window {
+  background: var(--saga-glass);
+  border: var(--saga-border-size) solid var(--saga-accent);
+  border-radius: var(--saga-radius);
+  box-shadow: none;
+}
+
+#outer-box {
+  margin: var(--saga-space-sm);
+}
+
+#input {
+  margin: 0 0 var(--saga-space-sm) 0;
+  padding: var(--saga-space-sm);
+  border-radius: calc(var(--saga-radius) - 2px);
+  border: 1px solid rgba(255, 255, 255, 0.15);
+  background: rgba(0, 0, 0, 0.15);
+  color: var(--saga-text);
+}
+
+#entry {
+  padding: 6px 8px;
+  border-radius: 6px;
+  color: var(--saga-text);
+}
+
+#entry:selected {
+  background: rgba(255, 255, 255, 0.10);
+}

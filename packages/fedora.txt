@@ -10,7 +10,6 @@ kitty|kitty
 hyprlock|hyprlock
 hypridle|hypridle
 mpvpaper|mpvpaper
-eww|eww
 xdg-desktop-portal-hyprland|xdg-desktop-portal-hyprland
 bluetoothctl|bluez
 brightnessctl|brightnessctl

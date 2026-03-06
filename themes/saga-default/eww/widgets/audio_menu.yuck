@@ -1,0 +1,11 @@
+(defwidget audio_menu_widget []
+  (box :class "panel" :orientation "v"
+    (label :class "panel-title" :text "Audio")
+    (label :class "panel-row" :text "Volume: ${saga_volume}%")
+    (scale :min 0 :max 100 :value {saga_volume} :onchange "saga panel set-volume {}")
+    (label :class "panel-row" :wrap true :limit-width 52 :text "${saga_audio_outputs}")
+    (entry :text {saga_audio_target} :placeholder "Output ID" :onchange "eww update saga_audio_target='{}'")
+    (button :class "panel-button" :onclick "saga audio set-default \"${saga_audio_target}\"" "Set output")
+    (button :class "panel-button" :onclick "saga panel refresh all" "Refresh")
+  )
+)

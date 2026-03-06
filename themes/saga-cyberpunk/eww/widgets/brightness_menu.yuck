@@ -1,0 +1,8 @@
+(defwidget brightness_menu_widget []
+  (box :class "panel" :orientation "v"
+    (label :class "panel-title" :text "Brightness")
+    (label :class "panel-row" :text "Brightness: ${saga_brightness}%")
+    (scale :min 1 :max 100 :value {saga_brightness} :onchange "saga panel set-brightness {}")
+    (button :class "panel-button" :onclick "saga panel refresh all" "Refresh")
+  )
+)

@@ -1,0 +1,93 @@
+(defvar saga_cpu "n/a")
+(defvar saga_ram "n/a")
+(defvar saga_disk "n/a")
+(defvar saga_net "offline")
+(defvar saga_wifi "off")
+(defvar saga_bt "off")
+(defvar saga_volume "0")
+(defvar saga_brightness "50")
+(defvar saga_wifi_scan "No WiFi scan data")
+(defvar saga_bt_list "No paired devices")
+(defvar saga_audio_outputs "No audio outputs")
+(defvar saga_wifi_ssid "")
+(defvar saga_wifi_password "")
+(defvar saga_bt_target "")
+(defvar saga_audio_target "")
+
+(include "./widgets/control_center.yuck")
+(include "./widgets/wifi_menu.yuck")
+(include "./widgets/bluetooth_menu.yuck")
+(include "./widgets/audio_menu.yuck")
+(include "./widgets/brightness_menu.yuck")
+(include "./widgets/system_stats.yuck")
+(include "./widgets/power_menu.yuck")
+
+(defwindow control_center
+  :monitor 0
+  :stacking "overlay"
+  :exclusive false
+  :focusable true
+  :close-on-unfocus true
+  :geometry (geometry :x "100%" :y "48px" :width "420px" :height "560px" :anchor "top right")
+  (control_center_widget)
+)
+
+(defwindow wifi_menu
+  :monitor 0
+  :stacking "overlay"
+  :exclusive false
+  :focusable true
+  :close-on-unfocus true
+  :geometry (geometry :x "100%" :y "48px" :width "460px" :height "460px" :anchor "top right")
+  (wifi_menu_widget)
+)
+
+(defwindow bluetooth_menu
+  :monitor 0
+  :stacking "overlay"
+  :exclusive false
+  :focusable true
+  :close-on-unfocus true
+  :geometry (geometry :x "100%" :y "48px" :width "460px" :height "420px" :anchor "top right")
+  (bluetooth_menu_widget)
+)
+
+(defwindow audio_menu
+  :monitor 0
+  :stacking "overlay"
+  :exclusive false
+  :focusable true
+  :close-on-unfocus true
+  :geometry (geometry :x "100%" :y "48px" :width "420px" :height "350px" :anchor "top right")
+  (audio_menu_widget)
+)
+
+(defwindow brightness_menu
+  :monitor 0
+  :stacking "overlay"
+  :exclusive false
+  :focusable true
+  :close-on-unfocus true
+  :geometry (geometry :x "100%" :y "48px" :width "420px" :height "240px" :anchor "top right")
+  (brightness_menu_widget)
+)
+
+(defwindow system_stats
+  :monitor 0
+  :stacking "overlay"
+  :exclusive false
+  :focusable true
+  :close-on-unfocus true
+  :geometry (geometry :x "100%" :y "48px" :width "420px" :height "360px" :anchor "top right")
+  (system_stats_widget)
+)
+
+(defwindow power_menu
+  :monitor 0
+  :stacking "overlay"
+  :exclusive false
+  :focusable true
+  :close-on-unfocus true
+  :geometry (geometry :x "100%" :y "48px" :width "320px" :height "220px" :anchor "top right")
+  (power_menu_widget)
+)

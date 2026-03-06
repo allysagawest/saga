@@ -32,7 +32,7 @@ Saga consists of:
 The main user CLI (`install`, `update`, `doctor`, `theme`, `query`, `subscribe`, etc.)
 
 2. Desktop configs under `desktop/`
-Hyprland, Waybar, EWW, SwayNC, Wofi
+Hyprland, Waybar, SwayNC, Wofi
 
 3. Theme engine under `themes/`
 `theme.json` + generated variables/styles
@@ -54,7 +54,6 @@ UI clients consume Saga daemon data from socket:
   - `~/.config/hypr -> <repo>/desktop/hypr`
   - `~/.config/waybar -> <repo>/desktop/waybar`
   - `~/.config/swaync -> <repo>/desktop/swaync`
-  - `~/.config/eww -> <repo>/desktop/eww`
   - `~/.config/wofi -> <repo>/desktop/wofi`
 
 ### Package groups
@@ -73,7 +72,6 @@ Core desktop:
 - hyprlock
 - hypridle
 - mpvpaper
-- eww
 - xdg-desktop-portal-hyprland
 - bluez
 - brightnessctl
@@ -108,12 +106,6 @@ chmod +x saga scripts/*.sh sagas/njal/*.sh
 ./cli/saga install
 ```
 
-Install with Njál module:
-
-```bash
-./cli/saga install --njal
-```
-
 During install, Saga:
 - detects distro
 - installs missing dependencies (with `sudo` package-manager calls)
@@ -125,6 +117,7 @@ During install, Saga:
 | Command | What it does |
 |---|---|
 | `saga install` | Installs the Saga desktop layer and dependencies. |
+| `saga theme <name>` | Applies a Saga theme into `~/.config/saga/themes` and installs renderer widgets. |
 | `saga doctor` | Checks required binaries and Hyprland config state. |
 | `saga uninstall` | Removes Saga-managed files and Saga-installed package set. |
 
@@ -155,19 +148,27 @@ hyprctl reload
 ## Theming
 
 Default theme:
+- `themes/saga-default/theme.json`
+
+Cyberpunk theme:
 - `themes/saga-cyberpunk/theme.json`
 
 Apply:
 
 ```bash
-saga theme apply saga-cyberpunk
+./cli/saga theme default
+```
+
+For the full cyberpunk visual style:
+
+```bash
+./cli/saga theme cyberpunk
 ```
 
 Theme apply regenerates:
 - `themes/<theme>/variables.css`
 - `themes/<theme>/variables.scss`
 - `desktop/waybar/style.css`
-- `desktop/eww/eww.scss`
 - `desktop/wofi/style.css`
 - `desktop/hypr/theme.conf`
 
@@ -248,8 +249,8 @@ Common issues:
 1. `error: saga socket not found`
 Start `sagad` so `~/.local/share/saga/saga.sock` exists.
 
-2. Waybar/EWW not updating live
-Confirm event listeners are running (`saga eww-stream`, `saga ui-listen`) and daemon publishes events.
+2. UI components not updating live
+Confirm Waybar and related services are running and reload Hyprland after config changes.
 
 3. Keybind changes not applied
 Run `./cli/saga install` again, then `hyprctl reload`.
@@ -277,7 +278,7 @@ bash -n cli/saga
 
 - `cli/` CLI entrypoint
 - `config/` centralized static config (shortcuts)
-- `desktop/` Hyprland/Waybar/EWW/SwayNC/Wofi config
+- `desktop/` Hyprland/Waybar/SwayNC/Wofi config
 - `sagas/` optional module installs
 - `scripts/` installers, generators, stream helpers
 - `themes/` theme definitions and style templates

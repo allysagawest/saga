@@ -1,0 +1,13 @@
+(defwidget wifi_menu_widget []
+  (box :class "panel" :orientation "v"
+    (label :class "panel-title" :text "WiFi")
+    (label :class "panel-row" :text "Status: ${saga_wifi}")
+    (label :class "panel-row" :wrap true :limit-width 56 :text "${saga_wifi_scan}")
+    (entry :text {saga_wifi_ssid} :placeholder "SSID" :onchange "eww update saga_wifi_ssid='{}'")
+    (entry :text {saga_wifi_password} :placeholder "Password (optional)" :onchange "eww update saga_wifi_password='{}'")
+    (box :orientation "h" :spacing 8
+      (button :class "panel-button" :onclick "saga wifi connect \"${saga_wifi_ssid}\" \"${saga_wifi_password}\"" "Connect")
+      (button :class "panel-button" :onclick "saga panel refresh all" "Refresh")
+    )
+  )
+)

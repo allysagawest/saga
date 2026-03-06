@@ -1,0 +1,33 @@
+{
+  "name": "Saga Default",
+  "colors": {
+    "primary": "#4a90e2",
+    "secondary": "#6ba8f0",
+    "accent": "#7f8c9a",
+    "background": "#121417",
+    "glass": "rgba(24, 28, 34, 0.92)",
+    "text": "#e6edf3",
+    "text-muted": "#a8b3bf",
+    "danger": "#d66a6a",
+    "success": "#6fbf8f"
+  },
+  "fonts": {
+    "ui": "JetBrainsMono Nerd Font",
+    "size": 12
+  },
+  "spacing": {
+    "xs": 4,
+    "sm": 8,
+    "md": 12,
+    "lg": 16
+  },
+  "ui": {
+    "radius": 8,
+    "border_size": 1,
+    "blur": 0
+  },
+  "animations": {
+    "windows": 4,
+    "workspace": 4
+  }
+}

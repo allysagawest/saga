@@ -1,0 +1,38 @@
+* {
+  font-family: $saga-font-ui, monospace;
+  font-size: $saga-font-size;
+  color: $saga-text;
+}
+
+.panel {
+  background: $saga-glass;
+  border: $saga-border-size solid $saga-accent;
+  border-radius: $saga-radius;
+  padding: $saga-space-md;
+  box-shadow: none;
+}
+
+.panel-title {
+  color: $saga-text;
+  font-weight: 600;
+  margin-bottom: $saga-space-sm;
+}
+
+.panel-row {
+  margin: $saga-space-xs 0;
+}
+
+.panel-button {
+  background: rgba(0, 0, 0, 0.15);
+  border: $saga-border-size solid $saga-accent;
+  border-radius: $saga-radius;
+  padding: $saga-space-xs $saga-space-sm;
+}
+
+.panel-button:hover {
+  border-color: $saga-secondary;
+}
+
+.power-danger {
+  border-color: $saga-danger;
+}

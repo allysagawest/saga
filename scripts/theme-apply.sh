@@ -2,13 +2,16 @@
 set -euo pipefail
 
 REPO_ROOT="${1:-}"
-THEME_NAME="${2:-saga-cyberpunk}"
+THEME_NAME="${2:-saga-default}"
 
 if [[ -z "$REPO_ROOT" ]]; then
   REPO_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 fi
 
 THEME_DIR="$REPO_ROOT/themes/$THEME_NAME"
+if [[ ! -f "$THEME_DIR/theme.json" ]]; then
+  THEME_DIR="$REPO_ROOT/themes/saga-$THEME_NAME"
+fi
 THEME_JSON="$THEME_DIR/theme.json"
 
 if [[ ! -f "$THEME_JSON" ]]; then
@@ -154,8 +157,8 @@ fi
 if command -v pkill >/dev/null 2>&1; then
   pkill -SIGUSR2 waybar >/dev/null 2>&1 || true
 fi
-if command -v eww >/dev/null 2>&1; then
-  eww reload >/dev/null 2>&1 || true
+if [[ -x "$HOME/.local/share/saga/bin/eww" ]]; then
+  "$HOME/.local/share/saga/bin/eww" --config "$HOME/.config/saga/widgets/eww" reload >/dev/null 2>&1 || true
 fi
 if command -v swaync-client >/dev/null 2>&1; then
   swaync-client -rs >/dev/null 2>&1 || true

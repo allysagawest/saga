@@ -1,0 +1,13 @@
+(defwidget power_menu_widget []
+  (box :class "panel" :orientation "v"
+    (label :class "panel-title" :text "Power")
+    (box :orientation "h" :spacing 8
+      (button :class "panel-button" :onclick "saga power lock" "Lock")
+      (button :class "panel-button" :onclick "saga power suspend" "Suspend")
+    )
+    (box :orientation "h" :spacing 8
+      (button :class "panel-button" :onclick "saga power restart" "Restart")
+      (button :class "panel-button power-danger" :onclick "saga power shutdown" "Shutdown")
+    )
+  )
+)

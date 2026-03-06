@@ -1,0 +1,37 @@
+* {
+  font-family: var(--saga-font-ui), monospace;
+  font-size: var(--saga-font-size);
+  color: var(--saga-text);
+}
+
+window#waybar {
+  background: var(--saga-glass);
+  border-bottom: var(--saga-border-size) solid var(--saga-accent);
+}
+
+#workspaces,
+#custom-launcher,
+#custom-cpu,
+#custom-wifi,
+#custom-bluetooth,
+#custom-volume,
+#clock {
+  margin: 4px 6px;
+  padding: 0 8px;
+  min-height: 28px;
+  background: transparent;
+  border: none;
+  box-shadow: none;
+}
+
+#workspaces button {
+  color: var(--saga-text-muted);
+  border: none;
+  padding: 0 6px;
+}
+
+#workspaces button.active {
+  color: var(--saga-text);
+  background: rgba(255, 255, 255, 0.08);
+  border-radius: 6px;
+}

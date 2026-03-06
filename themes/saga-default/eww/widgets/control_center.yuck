@@ -1,0 +1,18 @@
+(defwidget control_center_widget []
+  (box :class "panel" :orientation "v" :space-evenly false
+    (label :class "panel-title" :text "Control Center")
+    (label :class "panel-row" :text "WiFi: ${saga_wifi}")
+    (label :class "panel-row" :text "Bluetooth: ${saga_bt}")
+    (label :class "panel-row" :text "Volume: ${saga_volume}%")
+    (scale :min 0 :max 100 :value {saga_volume} :onchange "saga panel set-volume {}")
+    (label :class "panel-row" :text "Brightness: ${saga_brightness}%")
+    (scale :min 1 :max 100 :value {saga_brightness} :onchange "saga panel set-brightness {}")
+    (label :class "panel-row" :text "CPU: ${saga_cpu}")
+    (label :class "panel-row" :text "Memory: ${saga_ram}")
+    (box :orientation "h" :spacing 8
+      (button :class "panel-button" :onclick "saga power lock" "Lock")
+      (button :class "panel-button" :onclick "saga power restart" "Restart")
+      (button :class "panel-button power-danger" :onclick "saga power shutdown" "Shutdown")
+    )
+  )
+)
