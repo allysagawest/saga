@@ -92,6 +92,47 @@ install_pkg() {
   esac
 }
 
+google_oauth_package_name() {
+  detect_platform
+  case "$DISTRO" in
+    arch)
+      echo "python-aiohttp-oauthlib"
+      ;;
+    debian|ubuntu|fedora)
+      echo "python3-aiohttp-oauthlib"
+      ;;
+    *)
+      return 1
+      ;;
+  esac
+}
+
+has_google_oauth_module() {
+  python3 - <<'PY' >/dev/null 2>&1
+import importlib.util
+import sys
+
+sys.exit(0 if importlib.util.find_spec("aiohttp_oauthlib") else 1)
+PY
+}
+
+install_hrafn_google_oauth_support() {
+  local pkg
+
+  pkg="$(google_oauth_package_name)" || return 0
+  if has_google_oauth_module; then
+    record_package_state "$INSTALL_ID" "$pkg" "preexisting"
+    return 0
+  fi
+
+  install_pkg "$pkg"
+  if has_google_oauth_module; then
+    record_package_state "$INSTALL_ID" "$pkg" "installed"
+  else
+    record_package_state "$INSTALL_ID" "$pkg" "failed"
+  fi
+}
+
 remove_pkg() {
   local pkg="$1"
   case "$PKG_MGR" in
@@ -133,6 +174,8 @@ install_hrafn_packages() {
       record_package_state "$INSTALL_ID" "$package_name" "failed"
     fi
   done < "$PKG_FILE"
+
+  install_hrafn_google_oauth_support
 }
 
 remove_hrafn_packages() {

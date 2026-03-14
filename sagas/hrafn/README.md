@@ -108,6 +108,10 @@ OAuth client in Google Cloud Console, then stores that client in the
 Hrafn-managed `vdirsyncer` config and lets `vdirsyncer` handle authorization and
 token refresh.
 
+On Arch, Debian/Ubuntu, and Fedora, `./install.sh` also installs the system
+package that provides `aiohttp_oauthlib`, which `vdirsyncer` needs for the
+Google OAuth flow.
+
 ## Roles
 
 When a sync-backed account is connected, Hrafn asks how to classify the chosen

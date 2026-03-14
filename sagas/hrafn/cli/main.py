@@ -139,7 +139,10 @@ def _connect_caldav_calendar() -> CalendarConnection:
     typer.echo(_colorize("Wrote khal and vdirsyncer config. Discovering calendars now.", "sync_status"))
     output = finalize_caldav_connection(connection)
     typer.echo(_colorize(output, "sync_status"))
-    return _select_account_calendar(connection)
+    updated = _select_account_calendar(connection)
+    typer.echo(_colorize("Syncing the selected calendar now.", "sync_status"))
+    typer.echo(_colorize(run_vdirsyncer_sync(), "sync_status"))
+    return updated
 
 
 def _open_url(url: str) -> None:
@@ -205,7 +208,10 @@ def _connect_google_calendar() -> CalendarConnection:
     typer.echo(_colorize("Wrote khal and vdirsyncer config. Starting Google authorization now.", "sync_status"))
     output = finalize_google_connection(connection)
     typer.echo(_colorize(output, "sync_status"))
-    return _select_account_calendar(connection)
+    updated = _select_account_calendar(connection)
+    typer.echo(_colorize("Syncing the selected calendar now.", "sync_status"))
+    typer.echo(_colorize(run_vdirsyncer_sync(), "sync_status"))
+    return updated
 
 
 def _prompt_connection_role() -> str:
@@ -223,6 +229,45 @@ def _raise_invalid_role() -> str:
     raise CalendarStackError("Invalid choice. Select 1 for main or 2 for secondary.")
 
 
+def _prompt_account_collections(connection: CalendarConnection, collections: list[str]) -> list[str]:
+    if len(collections) == 1:
+        selected = [collections[0]]
+        typer.echo(
+            _colorize(
+                f"Only one calendar was discovered for {connection.name}. Using '{selected[0]}'.",
+                "sync_status",
+            )
+        )
+        return selected
+
+    typer.echo("Hrafn discovered these calendars for the account:", err=True)
+    for index, collection in enumerate(collections, start=1):
+        typer.echo(f"{index}. {collection}", err=True)
+    typer.echo("Select each calendar once by number or exact ID. Type 'done' when finished.", err=True)
+
+    selected: list[str] = []
+    while True:
+        prompt = "Select a calendar"
+        if selected:
+            prompt = f"Select a calendar [{len(selected)} chosen, or 'done']"
+        choice = typer.prompt(prompt).strip()
+        if choice.lower() == "done":
+            if selected:
+                return selected
+            raise CalendarStackError("Select at least one calendar before finishing.")
+        if choice.isdigit() and 1 <= int(choice) <= len(collections):
+            candidate = collections[int(choice) - 1]
+        elif choice in collections:
+            candidate = choice
+        else:
+            raise CalendarStackError("Invalid calendar selection.")
+        if candidate in selected:
+            typer.echo(_colorize(f"'{candidate}' is already selected.", "warning"), err=True)
+            continue
+        selected.append(candidate)
+        typer.echo(_colorize(f"Selected '{candidate}'.", "sync_status"))
+
+
 def _select_account_calendar(connection: CalendarConnection) -> CalendarConnection:
     collections = list_discovered_collections(connection)
     if not collections:
@@ -237,35 +282,21 @@ def _select_account_calendar(connection: CalendarConnection) -> CalendarConnecti
             f"No remote calendar collections were discovered for account '{connection.slug}'."
         )
 
-    if len(collections) == 1:
-        selected = collections[0]
-        typer.echo(
-            _colorize(
-                f"Only one calendar was discovered for {connection.name}. Using '{selected}'.",
-                "sync_status",
-            )
-        )
-    else:
-        typer.echo("Hrafn discovered these calendars for the account:", err=True)
-        for index, collection in enumerate(collections, start=1):
-            typer.echo(f"{index}. {collection}", err=True)
-        selection = typer.prompt("Select the one calendar Hrafn should sync for this account").strip()
-        if selection.isdigit() and 1 <= int(selection) <= len(collections):
-            selected = collections[int(selection) - 1]
-        elif selection in collections:
-            selected = selection
-        else:
-            raise CalendarStackError("Invalid calendar selection.")
-
+    selected = _prompt_account_collections(connection, collections)
     role = _prompt_connection_role()
     updated = update_connection_selection(
         connection,
-        selected_collection=selected,
+        selected_collections=selected,
         role=role,
     )
+    default_calendar = selected[0]
+    collection_label = ", ".join(selected)
+    note = ""
+    if role == "main" and len(selected) > 1:
+        note = f" Default writable calendar: '{default_calendar}'."
     typer.echo(
         _colorize(
-            f"Account '{updated.name}' is now pinned to calendar '{selected}' with role '{role}'.",
+            f"Account '{updated.name}' is now pinned to calendars [{collection_label}] with role '{role}'.{note}",
             "sync_status",
         )
     )

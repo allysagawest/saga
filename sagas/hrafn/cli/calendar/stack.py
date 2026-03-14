@@ -108,8 +108,7 @@ def read_agenda(days: int = 30) -> list[EventRecord]:
     ensure_binary("khal")
     ensure_khal_ready()
     command = ["khal", "list", "today", f"{days}d"]
-    main_calendar = get_main_calendar_name()
-    if main_calendar:
+    for main_calendar in get_main_calendar_names():
         command.extend(["-a", main_calendar])
     for field in KHAL_FIELDS:
         command.extend(["--json", field])
@@ -266,8 +265,7 @@ def finalize_caldav_connection(connection: CalendarConnection) -> str:
     ensure_binary("khal")
     ensure_vdirsyncer_ready()
     _run_command(["vdirsyncer", "discover", connection.slug], capture_output=False)
-    sync_result = _run_command(["vdirsyncer", "sync", connection.slug])
-    return (sync_result.stdout or sync_result.stderr).strip() or "CalDAV calendar connected."
+    return "CalDAV calendars discovered."
 
 
 def finalize_google_connection(connection: CalendarConnection) -> str:
@@ -275,8 +273,7 @@ def finalize_google_connection(connection: CalendarConnection) -> str:
     ensure_binary("khal")
     ensure_vdirsyncer_ready()
     _run_command(["vdirsyncer", "discover", connection.slug], capture_output=False)
-    sync_result = _run_command(["vdirsyncer", "sync", connection.slug])
-    return (sync_result.stdout or sync_result.stderr).strip() or "Google calendar connected."
+    return "Google calendars discovered."
 
 
 def list_discovered_collections(connection: CalendarConnection) -> list[str]:
@@ -293,17 +290,26 @@ def list_discovered_collections(connection: CalendarConnection) -> list[str]:
 def update_connection_selection(
     connection: CalendarConnection,
     *,
-    selected_collection: str,
+    selected_collections: str | list[str],
     role: str,
 ) -> CalendarConnection:
     normalized_role = _normalize_role(role)
     if normalized_role not in {"main", "secondary"}:
         raise CalendarStackError("Connection role must be 'main' or 'secondary'.")
 
+    if isinstance(selected_collections, str):
+        normalized_collections = [selected_collections]
+    else:
+        normalized_collections = [str(item).strip() for item in selected_collections if str(item).strip()]
+    deduped_collections = list(dict.fromkeys(normalized_collections))
+    if not deduped_collections:
+        raise CalendarStackError("Select at least one calendar collection.")
+
     available = set(list_discovered_collections(connection))
-    if available and selected_collection not in available:
+    missing = [item for item in deduped_collections if available and item not in available]
+    if missing:
         raise CalendarStackError(
-            f"Collection '{selected_collection}' was not discovered for account '{connection.slug}'."
+            f"Collection '{missing[0]}' was not discovered for account '{connection.slug}'."
         )
 
     updated = CalendarConnection(
@@ -313,7 +319,7 @@ def update_connection_selection(
         path=connection.path,
         role=normalized_role,
         sync_from_today=connection.sync_from_today,
-        selected_collections=[selected_collection],
+        selected_collections=deduped_collections,
         url=connection.url,
         username=connection.username,
         password=connection.password,
@@ -353,6 +359,13 @@ def get_main_calendar_name() -> str | None:
         if connection.role in {"master", "main"}:
             return connection.slug
     return None
+
+
+def get_main_calendar_names() -> list[str]:
+    for connection in load_connections():
+        if connection.role in {"master", "main"}:
+            return _khal_calendar_names(connection)
+    return []
 
 
 def has_khal_config() -> bool:
@@ -460,52 +473,48 @@ def reconcile_calendar_mirrors() -> str:
     expected_secondary_paths: dict[str, set[Path]] = {}
 
     for secondary in secondary_connections:
-        secondary_dir = _selected_collection_path(secondary)
-        if secondary_dir is None:
-            continue
-        secondary_dir.mkdir(parents=True, exist_ok=True)
         expected_secondary_paths[secondary.slug] = set()
+        for secondary_dir in _selected_collection_paths(secondary):
+            secondary_dir.mkdir(parents=True, exist_ok=True)
 
-        for source_file in _list_native_ics_files(secondary_dir):
-            target_file = main_dir / _mirror_filename("detail", secondary.slug, source_file)
-            expected_main_paths.add(target_file)
-            changed, existed = _write_mirror_file(
-                source_file=source_file,
-                target_file=target_file,
-                target_kind="detail",
-                source_connection=secondary,
-            )
-            if changed:
-                if existed:
-                    updated += 1
-                else:
-                    created += 1
+            for source_file in _list_native_ics_files(secondary_dir):
+                target_file = main_dir / _mirror_filename("detail", secondary.slug, source_file)
+                expected_main_paths.add(target_file)
+                changed, existed = _write_mirror_file(
+                    source_file=source_file,
+                    target_file=target_file,
+                    target_kind="detail",
+                    source_connection=secondary,
+                )
+                if changed:
+                    if existed:
+                        updated += 1
+                    else:
+                        created += 1
 
-        for source_file in main_native_files:
-            target_file = secondary_dir / _mirror_filename("busy", main_connection.slug, source_file)
-            expected_secondary_paths[secondary.slug].add(target_file)
-            changed, existed = _write_mirror_file(
-                source_file=source_file,
-                target_file=target_file,
-                target_kind="busy",
-                source_connection=main_connection,
-            )
-            if changed:
-                if existed:
-                    updated += 1
-                else:
-                    created += 1
+            for source_file in main_native_files:
+                target_file = secondary_dir / _mirror_filename("busy", main_connection.slug, source_file)
+                expected_secondary_paths[secondary.slug].add(target_file)
+                changed, existed = _write_mirror_file(
+                    source_file=source_file,
+                    target_file=target_file,
+                    target_kind="busy",
+                    source_connection=main_connection,
+                )
+                if changed:
+                    if existed:
+                        updated += 1
+                    else:
+                        created += 1
 
     removed += _prune_stale_mirror_files(main_dir, expected_main_paths, kind="detail")
     for secondary in secondary_connections:
-        secondary_dir = _selected_collection_path(secondary)
-        if secondary_dir is None:
-            continue
-        removed += _prune_stale_mirror_files(
-            secondary_dir,
-            expected_secondary_paths.get(secondary.slug, set()),
-            kind="busy",
-        )
+        for secondary_dir in _selected_collection_paths(secondary):
+            removed += _prune_stale_mirror_files(
+                secondary_dir,
+                expected_secondary_paths.get(secondary.slug, set()),
+                kind="busy",
+            )
 
     _save_mirror_state(created=created, updated=updated, removed=removed)
     return f"Hrafn mirror sync: created={created} updated={updated} removed={removed}"
@@ -514,16 +523,16 @@ def reconcile_calendar_mirrors() -> str:
 def cleanup_calendar_mirrors() -> str:
     removed = 0
     for connection in load_connections():
-        collection_dir = _selected_collection_path(connection)
-        if collection_dir is None or not collection_dir.exists():
-            continue
-        for candidate in collection_dir.glob("hrafn-*.ics"):
-            if not candidate.is_file():
+        for collection_dir in _selected_collection_paths(connection):
+            if not collection_dir.exists():
                 continue
-            if not _is_hrafn_generated_ics(candidate):
-                continue
-            candidate.unlink()
-            removed += 1
+            for candidate in collection_dir.glob("hrafn-*.ics"):
+                if not candidate.is_file():
+                    continue
+                if not _is_hrafn_generated_ics(candidate):
+                    continue
+                candidate.unlink()
+                removed += 1
     _save_mirror_state(created=0, updated=0, removed=removed)
     return f"Removed {removed} Hrafn-generated mirror file(s). Run 'hrafn sync' once after cleanup to push the deletions."
 
@@ -547,6 +556,8 @@ def _run_command(
 
 def _format_command_error(args: Sequence[str], stderr: str) -> str:
     if args and args[0] == "vdirsyncer":
+        if "aiohttp-oauthlib not installed" in stderr:
+            return _build_vdirsyncer_google_oauth_error(stderr)
         href = _extract_vdirsyncer_missing_href(stderr)
         if href:
             return _build_vdirsyncer_missing_href_error(href, stderr)
@@ -593,6 +604,43 @@ def _build_vdirsyncer_missing_href_error(href: str, stderr: str) -> str:
             )
 
     return "\n".join(lines)
+
+
+def _build_vdirsyncer_google_oauth_error(stderr: str) -> str:
+    install_hint = _google_oauth_install_hint()
+    lines = [
+        stderr,
+        "",
+        "Hrafn diagnosis: vdirsyncer's Google backend is missing its aiohttp OAuth dependency.",
+    ]
+    if install_hint:
+        lines.append(f"Install it with: {install_hint}")
+    else:
+        lines.append("Install the distro package that provides the Python module 'aiohttp_oauthlib', then run the command again.")
+    lines.append("After installing it, rerun 'hrafn connect --provider google' or 'vdirsyncer discover'.")
+    return "\n".join(lines)
+
+
+def _google_oauth_install_hint() -> str | None:
+    distro = _detect_linux_distro()
+    return {
+        "arch": "sudo pacman -S python-aiohttp-oauthlib",
+        "endeavouros": "sudo pacman -S python-aiohttp-oauthlib",
+        "debian": "sudo apt install python3-aiohttp-oauthlib",
+        "ubuntu": "sudo apt install python3-aiohttp-oauthlib",
+        "fedora": "sudo dnf install python3-aiohttp-oauthlib",
+    }.get(distro)
+
+
+def _detect_linux_distro() -> str | None:
+    os_release = Path("/etc/os-release")
+    if not os_release.exists():
+        return None
+
+    for raw_line in os_release.read_text(encoding="utf-8").splitlines():
+        if raw_line.startswith("ID="):
+            return raw_line.split("=", 1)[1].strip().strip('"').lower()
+    return None
 
 
 def _parse_khal_json_output(output: str | None) -> list[object]:
@@ -666,12 +714,29 @@ def _upsert_connection(
 
 
 def _selected_collection_path(connection: CalendarConnection) -> Path | None:
+    paths = _selected_collection_paths(connection)
+    if not paths:
+        return None
+    return paths[0]
+
+
+def _selected_collection_paths(connection: CalendarConnection) -> list[Path]:
     if connection.kind == "local":
-        return Path(connection.path)
+        return [Path(connection.path)]
     selected = connection.selected_collections or []
     if not selected:
-        return None
-    return Path(connection.path) / selected[0]
+        return []
+    return [Path(connection.path) / collection for collection in selected]
+
+
+def _khal_calendar_names(connection: CalendarConnection) -> list[str]:
+    selected = connection.selected_collections or []
+    if connection.kind == "local" or not selected:
+        return [connection.slug]
+    names = [connection.slug]
+    for index in range(1, len(selected)):
+        names.append(f"{connection.slug}__{index + 1}")
+    return names
 
 
 def _list_native_ics_files(collection_dir: Path) -> list[Path]:
@@ -690,7 +755,7 @@ def _is_hrafn_generated_ics(path: Path) -> bool:
 
 
 def _mirror_filename(kind: str, source_slug: str, source_file: Path) -> str:
-    digest = sha1(f"{source_slug}:{source_file.name}".encode("utf-8")).hexdigest()[:16]
+    digest = sha1(f"{source_slug}:{source_file.parent.name}:{source_file.name}".encode("utf-8")).hexdigest()[:16]
     return f"hrafn-{kind}-{source_slug}-{digest}.ics"
 
 
@@ -935,13 +1000,14 @@ def _render_khal_config(connections: list[CalendarConnection]) -> str:
         elif connection.kind in {"caldav", "google"}:
             selected = connection.selected_collections or []
             if selected:
-                lines.extend(
-                    [
-                        f"[[{connection.slug}]]",
-                        f"path = {Path(connection.path) / selected[0]}",
-                        "",
-                    ]
-                )
+                for calendar_name, collection in zip(_khal_calendar_names(connection), selected, strict=False):
+                    lines.extend(
+                        [
+                            f"[[{calendar_name}]]",
+                            f"path = {Path(connection.path) / collection}",
+                            "",
+                        ]
+                    )
             else:
                 lines.extend(
                     [
