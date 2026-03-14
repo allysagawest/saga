@@ -1,0 +1,18 @@
+{
+  "hrafn": {
+    "name": "Hrafn",
+    "description": "Hrafn is SagaOS's terminal-first operational awareness engine for local calendar state, tasks, and deterministic signals.",
+    "quote": {
+      "text": "Often is counsel needed, and not force alone.",
+      "source": "Hrafnkels saga"
+    }
+  },
+  "njal": {
+    "name": "Njal",
+    "description": "Njal is SagaOS's shell environment module for Zsh-based terminal workflow and user configuration.",
+    "quote": {
+      "text": "With law shall our land be built up, but with lawlessness laid waste.",
+      "source": "Njals saga"
+    }
+  }
+}

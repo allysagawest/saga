@@ -25,13 +25,245 @@ SAGA_APPLY_THEME_SCRIPT="$REPO_ROOT/cli/theme/apply_theme.sh"
 
 usage() {
   cat <<'USAGE'
+SagaOS CLI
+
+Manage the core Saga desktop layer and optional saga modules.
+
 Usage:
-  ./cli/saga install [--dry-run]
-  ./cli/saga dry-run [install|uninstall]
-  ./cli/saga theme <name>
-  ./cli/saga uninstall [--dry-run]
-  ./cli/saga doctor
+  ./cli/saga install [--dry-run]         Install the core desktop layer
+  ./cli/saga install <saga> [--dry-run]  Install one saga module
+  ./cli/saga install all [--dry-run]     Install the desktop layer and all sagas
+  ./cli/saga uninstall [--dry-run]       Uninstall the core desktop layer
+  ./cli/saga uninstall <saga> [--dry-run]
+                                          Uninstall one saga module
+  ./cli/saga uninstall all [--dry-run]   Uninstall all saga modules, then the desktop layer
+  ./cli/saga dry-run [install|uninstall] Preview core desktop changes
+  ./cli/saga sagas                       List available saga modules, quotes, and descriptions
+  ./cli/saga theme <name>                Apply a Saga theme
+  ./cli/saga doctor                      Check install health and managed config state
+  ./cli/saga help <saga>                 Show detailed help for one saga module
+
+Examples:
+  ./cli/saga install
+  ./cli/saga install --dry-run
+  ./cli/saga install hrafn
+  ./cli/saga uninstall hrafn
+  ./cli/saga install all --dry-run
+  ./cli/saga theme cyberpunk
+  ./cli/saga sagas
+  ./cli/saga help hrafn
+
+Dry Run:
+  Use --dry-run to preview package installs, file creation, config injection,
+  and uninstall actions before any changes are made.
 USAGE
+}
+
+catalog_value() {
+  local module="$1"
+  local key="$2"
+  python3 - "$REPO_ROOT/sagas/catalog.json" "$module" "$key" <<'PY'
+import json
+import sys
+from pathlib import Path
+
+catalog = json.loads(Path(sys.argv[1]).read_text(encoding="utf-8"))
+module = sys.argv[2]
+key = sys.argv[3]
+entry = catalog.get(module, {})
+
+value = entry
+for part in key.split("."):
+    if not isinstance(value, dict):
+        value = ""
+        break
+    value = value.get(part, "")
+
+print(value)
+PY
+}
+
+module_install_script() {
+  local module="$1"
+  echo "$REPO_ROOT/sagas/$module/install.sh"
+}
+
+module_uninstall_script() {
+  local module="$1"
+  local dedicated_script="$REPO_ROOT/sagas/$module/uninstall.sh"
+  local installer_script
+
+  if [[ -x "$dedicated_script" ]]; then
+    echo "$dedicated_script"
+    return
+  fi
+
+  installer_script="$(module_install_script "$module")"
+  if [[ -x "$installer_script" ]]; then
+    echo "$installer_script"
+    return
+  fi
+
+  echo "$dedicated_script"
+}
+
+module_readme() {
+  local module="$1"
+  echo "$REPO_ROOT/sagas/$module/README.md"
+}
+
+module_description() {
+  local module="$1"
+  local description
+  description="$(catalog_value "$module" "description")"
+  if [[ -n "$description" ]]; then
+    echo "$description"
+  else
+    echo "Saga module: $module"
+  fi
+}
+
+module_quote() {
+  local module="$1"
+  local quote_text
+  local quote_source
+
+  quote_text="$(catalog_value "$module" "quote.text")"
+  quote_source="$(catalog_value "$module" "quote.source")"
+
+  if [[ -n "$quote_text" ]]; then
+    echo "\"$quote_text\""
+    [[ -n "$quote_source" ]] && echo "  $quote_source"
+  fi
+}
+
+module_exists() {
+  local module="$1"
+  [[ -d "$REPO_ROOT/sagas/$module" ]]
+}
+
+list_modules() {
+  find "$REPO_ROOT/sagas" -mindepth 1 -maxdepth 1 -type d -printf '%f\n' | sort
+}
+
+list_module_catalog() {
+  local module
+
+  while IFS= read -r module; do
+    [[ -n "$module" ]] || continue
+    echo "$module"
+    echo "  $(module_description "$module")"
+    if [[ -n "$(catalog_value "$module" "quote.text")" ]]; then
+      echo "  Quote: \"$(catalog_value "$module" "quote.text")\""
+      echo "         $(catalog_value "$module" "quote.source")"
+    fi
+    echo
+  done < <(list_modules)
+}
+
+run_module_install() {
+  local module="$1"
+  local script
+
+  script="$(module_install_script "$module")"
+  if [[ ! -x "$script" ]]; then
+    echo "[ERROR] Module '$module' is missing an executable install script at $script" >&2
+    exit 1
+  fi
+
+  if [[ "$SAGA_DRY_RUN" -eq 1 ]]; then
+    "$script" install --dry-run
+  else
+    "$script" install
+  fi
+}
+
+run_module_uninstall() {
+  local module="$1"
+  local script
+  local command=""
+
+  script="$(module_uninstall_script "$module")"
+  if [[ ! -x "$script" ]]; then
+    echo "[ERROR] Module '$module' is missing an executable uninstall entrypoint." >&2
+    exit 1
+  fi
+
+  if [[ "$(basename "$script")" == "install.sh" ]]; then
+    command="uninstall"
+  fi
+
+  if [[ "$SAGA_DRY_RUN" -eq 1 ]]; then
+    if [[ -n "$command" ]]; then
+      "$script" "$command" --dry-run
+    else
+      "$script" --dry-run
+    fi
+  else
+    if [[ -n "$command" ]]; then
+      "$script" "$command"
+    else
+      "$script"
+    fi
+  fi
+}
+
+install_all_modules() {
+  local module
+
+  while IFS= read -r module; do
+    [[ -n "$module" ]] || continue
+    echo "[INFO] Installing saga module: $module"
+    run_module_install "$module"
+  done < <(list_modules)
+}
+
+uninstall_all_modules() {
+  local module
+  local script
+
+  while IFS= read -r module; do
+    [[ -n "$module" ]] || continue
+    script="$(module_uninstall_script "$module")"
+    if [[ -x "$script" ]]; then
+      echo "[INFO] Uninstalling saga module: $module"
+      run_module_uninstall "$module"
+    else
+      echo "[INFO] Skipping saga module without uninstall script: $module"
+    fi
+  done < <(list_modules)
+}
+
+show_module_help() {
+  local module="$1"
+  local readme_path
+
+  if ! module_exists "$module"; then
+    echo "[ERROR] Unknown saga module: $module" >&2
+    exit 1
+  fi
+
+  echo "$(module_description "$module")"
+  module_quote "$module"
+  echo
+
+  case "$module" in
+    hrafn)
+      if command -v hrafn >/dev/null 2>&1; then
+        hrafn --help
+      else
+        "$(module_install_script "$module")" --help
+      fi
+      ;;
+    *)
+      readme_path="$(module_readme "$module")"
+      if [[ -f "$readme_path" ]]; then
+        sed -n '1,160p' "$readme_path"
+      else
+        echo "Module '$module' has no CLI help. Installer: $(module_install_script "$module")"
+      fi
+      ;;
+  esac
 }
 
 apply_theme() {
@@ -44,23 +276,67 @@ apply_theme() {
 }
 
 install() {
-  saga_install_flow
-  if [[ "$SAGA_DRY_RUN" -eq 1 ]]; then
-    echo "[DRY-RUN] Would apply theme: default"
-  else
-    apply_theme "default"
-  fi
+  local target="${1:-desktop}"
 
-  if command -v hyprctl >/dev/null 2>&1 && [[ "$SAGA_DRY_RUN" -eq 0 ]]; then
-    hyprctl reload >/dev/null 2>&1 || true
-  fi
+  case "$target" in
+    desktop)
+      saga_install_flow
+      if [[ "$SAGA_DRY_RUN" -eq 1 ]]; then
+        echo "[DRY-RUN] Would apply theme: default"
+      else
+        apply_theme "default"
+      fi
 
-  echo "Saga install complete"
+      if command -v hyprctl >/dev/null 2>&1 && [[ "$SAGA_DRY_RUN" -eq 0 ]]; then
+        hyprctl reload >/dev/null 2>&1 || true
+      fi
+
+      echo "Saga install complete"
+      ;;
+    all)
+      saga_install_flow
+      if [[ "$SAGA_DRY_RUN" -eq 1 ]]; then
+        echo "[DRY-RUN] Would apply theme: default"
+      else
+        apply_theme "default"
+      fi
+      install_all_modules
+      if command -v hyprctl >/dev/null 2>&1 && [[ "$SAGA_DRY_RUN" -eq 0 ]]; then
+        hyprctl reload >/dev/null 2>&1 || true
+      fi
+      echo "Saga install complete"
+      ;;
+    *)
+      if ! module_exists "$target"; then
+        echo "[ERROR] Unknown install target: $target" >&2
+        exit 1
+      fi
+      run_module_install "$target"
+      ;;
+  esac
 }
 
 uninstall() {
-  saga_uninstall_flow
-  echo "Saga uninstall complete"
+  local target="${1:-desktop}"
+
+  case "$target" in
+    desktop)
+      saga_uninstall_flow
+      echo "Saga uninstall complete"
+      ;;
+    all)
+      uninstall_all_modules
+      saga_uninstall_flow
+      echo "Saga uninstall complete"
+      ;;
+    *)
+      if ! module_exists "$target"; then
+        echo "[ERROR] Unknown uninstall target: $target" >&2
+        exit 1
+      fi
+      run_module_uninstall "$target"
+      ;;
+  esac
 }
 
 doctor() {
@@ -73,20 +349,26 @@ main() {
   case "$command" in
     install)
       shift || true
+      local install_target="${1:-desktop}"
+      if [[ "$install_target" != "--dry-run" ]]; then
+        shift || true
+      else
+        install_target="desktop"
+      fi
       if [[ "${1:-}" == "--dry-run" ]]; then
         SAGA_DRY_RUN=1
       fi
-      install
+      install "$install_target"
       ;;
     dry-run)
       shift || true
       SAGA_DRY_RUN=1
       case "${1:-install}" in
         install)
-          install
+          install desktop
           ;;
         uninstall)
-          uninstall
+          uninstall desktop
           ;;
         *)
           echo "[ERROR] Unknown dry-run target: ${1:-}" >&2
@@ -100,13 +382,30 @@ main() {
       ;;
     uninstall)
       shift || true
+      local uninstall_target="${1:-desktop}"
+      if [[ "$uninstall_target" != "--dry-run" ]]; then
+        shift || true
+      else
+        uninstall_target="desktop"
+      fi
       if [[ "${1:-}" == "--dry-run" ]]; then
         SAGA_DRY_RUN=1
       fi
-      uninstall
+      uninstall "$uninstall_target"
       ;;
     doctor)
       doctor
+      ;;
+    sagas)
+      list_module_catalog
+      ;;
+    help)
+      shift || true
+      if [[ -z "${1:-}" ]]; then
+        usage
+        exit 1
+      fi
+      show_module_help "$1"
       ;;
     -h|--help|help|"")
       usage

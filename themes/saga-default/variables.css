@@ -1,26 +1,26 @@
 :root {
-  --saga-primary: #ff2bd6;
-  --saga-secondary: #00eaff;
-  --saga-accent: #9d4edd;
-  --saga-bg: #0b0b12;
-  --saga-glass: rgba(20,20,40,0.65);
-  --saga-text: #ffffff;
-  --saga-text-muted: #a0a0b0;
-  --saga-danger: #ff4d6d;
-  --saga-success: #00f5a0;
+  --saga-primary: #4a90e2;
+  --saga-secondary: #6ba8f0;
+  --saga-accent: #7f8c9a;
+  --saga-bg: #121417;
+  --saga-glass: rgba(24, 28, 34, 0.92);
+  --saga-text: #e6edf3;
+  --saga-text-muted: #a8b3bf;
+  --saga-danger: #d66a6a;
+  --saga-success: #6fbf8f;
 
   --saga-font-ui: "JetBrainsMono Nerd Font";
-  --saga-font-size: 13px;
+  --saga-font-size: 12px;
 
-  --saga-space-xs: 6px;
-  --saga-space-sm: 10px;
-  --saga-space-md: 14px;
-  --saga-space-lg: 20px;
+  --saga-space-xs: 4px;
+  --saga-space-sm: 8px;
+  --saga-space-md: 12px;
+  --saga-space-lg: 16px;
 
-  --saga-radius: 12px;
-  --saga-border-size: 2px;
-  --saga-blur: 20px;
+  --saga-radius: 0px;
+  --saga-border-size: 1px;
+  --saga-blur: 0px;
 
-  --saga-anim-windows: 7;
-  --saga-anim-workspace: 6;
+  --saga-anim-windows: 4;
+  --saga-anim-workspace: 4;
 }

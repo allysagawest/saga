@@ -29,5 +29,25 @@
   "animations": {
     "windows": 7,
     "workspace": 6
+  },
+  "hrafn": {
+    "colors": {
+      "agenda_time": "#00eaff",
+      "agenda_title": "#ffffff",
+      "task": "#00f5a0",
+      "empty": "#a0a0b0",
+      "meeting_starting_soon": "#ff2bd6",
+      "meeting_live": "#00eaff",
+      "tasks_due_today": "#ff4d6d",
+      "focus_window_available": "#9d4edd",
+      "sync_status": "#00eaff",
+      "error": "#ff4d6d",
+      "warning": "#ff9f1c"
+    },
+    "fonts": {
+      "ui": "JetBrainsMono Nerd Font",
+      "display": "JetBrainsMono Nerd Font",
+      "size": 13
+    }
   }
 }

@@ -34,3 +34,7 @@ njal:zoxide|zoxide
 njal:btop|btop
 njal:lazygit|lazygit
 njal:tmux|tmux
+
+# Hrafn module
+hrafn:khal|khal
+hrafn:vdirsyncer|vdirsyncer

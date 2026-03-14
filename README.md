@@ -39,6 +39,7 @@ Hyprland, Waybar, SwayNC, Wofi
 
 4. Optional modules under `sagas/`
 Current module: `njal` (Zsh environment)
+Module catalog: `sagas/README.md`
 
 5. Event bus integration
 UI clients consume Saga daemon data from socket:
@@ -118,6 +119,7 @@ During install, Saga:
 |---|---|
 | `saga install` | Installs the Saga desktop layer and dependencies. |
 | `saga theme <name>` | Applies a Saga theme into `~/.config/saga/themes` and installs renderer widgets. |
+| `saga help <saga>` | Shows a saga module description, quote, and module help. |
 | `saga doctor` | Checks required binaries and Hyprland config state. |
 | `saga uninstall` | Removes Saga-managed files and Saga-installed package set. |
 

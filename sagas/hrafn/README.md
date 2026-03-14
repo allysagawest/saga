@@ -1,332 +1,133 @@
 # Hrafn
-### SagaOS Terminal Intelligence Layer
 
-**Status:** Concept / Early Architecture  
-**Project:** SagaOS Module  
-**Philosophy:** Terminal-first operational awareness
+Hrafn is SagaOS's terminal-first calendar intelligence layer.
 
----
+It does not talk to calendar providers directly. Hrafn is a thin wrapper around:
 
-# Overview
+- `vdirsyncer` for synchronization
+- `khal` for querying and writing local calendars
 
-**Hrafn** is a terminal-first operational signal engine for SagaOS.
+That keeps Hrafn focused on operational awareness instead of calendar API
+integration.
 
-It aggregates signals from calendars and task systems, computes deterministic insights about time and workload, and exposes those insights as structured signals that power:
+## Architecture
 
-- terminal dashboards
-- SagaOS widgets
-- automation
-- bindings
-- future AI augmentation
+Hrafn assumes the standard `vdirsyncer` and `khal` configuration locations are
+already in use.
 
-Instead of acting as a traditional productivity tool, Hrafn acts as a **personal operational awareness layer**.
+- remote providers sync into local `.ics` data through `vdirsyncer`
+- `khal` reads and writes those local calendars
+- Hrafn shells out to those tools and computes signals from their results
 
-The name comes from the Norse raven (*Hrafn*), a symbol of intelligence gathering and situational awareness.
+Hrafn does not implement:
 
----
+- Google OAuth
+- Google Calendar API access
+- token storage
+- custom calendar databases
+- provider-specific sync code
 
-# Core Idea
+## Commands
 
-Most productivity systems expose **data**.
-
-Hrafn exposes **signals**.
-
-Example transformation:
-
-```
-Calendar events
-Tasks
-Meeting links
-
-↓
-
-Deterministic computation
-
-↓
-
-Signals
-meeting_in_10_minutes
-focus_window_available
-schedule_overloaded
-tasks_due_today
-client_load_high
+```bash
+hrafn connect
+hrafn dashboard
+hrafn sync
+hrafn agenda
+hrafn agenda --json
+hrafn calendars
+hrafn new-event --title "Architecture Meeting" --start "2026-03-14 09:00" --end "2026-03-14 10:00"
+hrafn signals
 ```
 
-These signals power dashboards, widgets, and automation across SagaOS.
+## Command Behavior
 
----
+`hrafn connect`
 
-# Key Capabilities
+- sets up calendar access from inside Hrafn
+- creates standard `~/.config/khal/config` and `~/.config/vdirsyncer/config`
+- supports a local calendar, a CalDAV account, or a Google account through `vdirsyncer`
+- includes an in-CLI Google setup walkthrough for creating a user-owned Desktop OAuth client
+- runs `vdirsyncer discover` and `vdirsyncer sync` for sync-backed connections
+- if multiple remote calendars are discovered for an account, Hrafn asks which single calendar should be pinned for that account
+- supports one main calendar and unlimited secondary calendars
+- mirrors full-detail secondary events into the main calendar, prefixing the title with the source calendar name
+- mirrors main-calendar events back into each secondary as `Busy` blocks
 
-Hrafn provides five core capabilities.
+`hrafn dashboard`
 
-### Calendar Aggregation
+- launches the cyberpunk terminal operations console
+- subscribes to the in-process Hrafn bus instead of owning calendar/task state
+- publishes keyboard actions like refresh, sync, join-next-meeting, and complete-task onto the bus
 
-Hrafn aggregates multiple calendars into a unified view.
+`hrafn sync`
 
-Supported providers:
+- runs `vdirsyncer sync`
 
-- Google Calendar
-- Microsoft 365
-- CalDAV
-- Nextcloud
+`hrafn agenda`
 
-Users can view their **entire day across all accounts** from the terminal.
+- runs `khal list today 30d`
+- uses khal JSON output for deterministic parsing
+- supports `--json`
 
----
+`hrafn calendars`
 
-### Cross-Calendar Busy Sync
+- runs `khal printcalendars`
 
-Hrafn coordinates availability across calendars to prevent double booking.
+`hrafn new-event`
 
-When an event exists in one calendar, Hrafn propagates **busy blocks** to the others.
+- runs `khal new`
+- supports `--calendar`, `--title`, `--start`, and `--end`
 
-Example:
+`hrafn signals`
 
-```
-Client A calendar
-09:00 – 10:00 Architecture Meeting
+- computes `meeting_starting_soon`
+- computes `meeting_live`
+- computes `focus_window_available`
+- uses events returned by `khal`
 
-Client B calendar
-09:00 – 10:00 Busy (external)
+## Dependencies
 
-Personal calendar
-09:00 – 10:00 Busy
-```
+Hrafn requires these binaries on `PATH`:
 
-This ensures that scheduling systems see accurate availability across all calendars.
+- `vdirsyncer`
+- `khal`
 
-Privacy is preserved by mirroring **busy-only blocks**.
+If one is missing, Hrafn prints install guidance for Arch, Debian/Ubuntu, and
+Fedora.
 
----
+If khal or vdirsyncer is not configured yet, Hrafn points users to `hrafn connect`
+instead of expecting them to run external setup commands.
 
-### Task Integration
+## Google Accounts
 
-Tasks integrate with Hrafn using Taskwarrior.
+Hrafn stays OSS-friendly by not shipping a project-owned Google OAuth client.
 
-Features:
+For Google Calendar, Hrafn guides each user through creating their own Desktop
+OAuth client in Google Cloud Console, then stores that client in the
+Hrafn-managed `vdirsyncer` config and lets `vdirsyncer` handle authorization and
+token refresh.
 
-- due dates
-- priorities
-- projects
-- tags
-- cross-machine sync
+## Roles
 
-Tasks remain separate from calendar events but are considered in workload insights.
+When a sync-backed account is connected, Hrafn asks how to classify the chosen
+calendar:
 
----
+- `main`: the default writable calendar for `hrafn new-event`; its native events are mirrored to secondaries as `Busy`
+- `secondary`: a writable calendar whose native events are mirrored into the main calendar with full details
 
-### Deterministic Insight Engine
+If a mirror run goes wrong, `hrafn cleanup-mirrors` removes every Hrafn-generated
+mirror `.ics` file from the local stores so the next `hrafn sync` can propagate
+the deletions upstream.
 
-Hrafn computes schedule intelligence using deterministic algorithms.
+## Installation
 
-Examples:
+From the repository:
 
-- meeting density
-- focus windows
-- workload distribution
-- task pressure
-- client calendar load
-
-No AI or ML is required for the core system.
-
-All insights are computed locally.
-
----
-
-### Signal Engine
-
-Hrafn emits signals describing operational state.
-
-Examples:
-
-```
-meeting_starting_soon
-meeting_live
-task_overdue
-focus_window_available
-schedule_overloaded
-calendar_sync_complete
+```bash
+cd sagas/hrafn
+./install.sh
 ```
 
-Widgets, dashboards, and automation subscribe to these signals.
-
----
-
-# Architecture Overview
-
-```mermaid
-flowchart TD
-
-A[External Providers] --> B[Sync Layer]
-B --> C[Local Storage]
-
-C --> D[Hrafn Core Engine]
-
-D --> E[Signal Bus]
-
-E --> F[Terminal Dashboard]
-E --> G[Saga Widgets]
-E --> H[Bindings]
-E --> I[Automation]
-```
-
----
-
-# Cross-Calendar Coordination
-
-```mermaid
-flowchart TD
-
-A[Client A Calendar] --> D[Hrafn Sync Engine]
-B[Client B Calendar] --> D
-C[Personal Calendar] --> D
-
-D --> E[Local Calendar Store]
-
-D --> F[Busy Propagation Engine]
-
-F --> A
-F --> B
-F --> C
-```
-
-Busy propagation ensures no scheduling system sees conflicting availability.
-
----
-
-# Terminal-First Design
-
-The primary interface for Hrafn is the terminal.
-
-Example dashboard:
-
-```
-╔══════════════════════════════════════╗
-║ HRAFN COMMAND CONSOLE                ║
-╠══════════════════════════════════════╣
-
-MEETING RADAR
-09:00 Client A Standup
-11:30 Architecture Review
-14:00 Client B Planning
-
-NEXT EVENT
-Client A Standup
-T-00:11:42
-
-TASK MATRIX
-MeetingScore ██████░░
-NVL ████████
-Ops ███░░░░
-
-SYSTEM
-calendar sync ✓
-task sync ✓
-alerts 3
-```
-
----
-
-# Widget-Ready Architecture
-
-Hrafn is UI-agnostic.
-
-It exposes structured outputs:
-
-- terminal rendering
-- JSON APIs
-- event bus signals
-
-Widgets can later render these signals using whatever UI engine SagaOS adopts.
-
----
-
-# Build Strategy
-
-Hrafn is designed to be built progressively.
-
-### Layer 1 — Calendar Sync
-
-Goal:
-
-```
-See my day across all calendars in the terminal.
-```
-
-Features:
-
-- calendar sync
-- unified agenda
-
----
-
-### Layer 2 — Task Integration
-
-Add:
-
-- Taskwarrior tasks
-- due date awareness
-
----
-
-### Layer 3 — Meeting Intelligence
-
-Add:
-
-- next meeting detection
-- meeting join
-- countdown signals
-
----
-
-### Layer 4 — Deterministic Insights
-
-Add algorithms for:
-
-- meeting density
-- focus windows
-- workload distribution
-- task pressure
-
----
-
-### Layer 5 — Signal Bus
-
-Emit signals for:
-
-```
-meeting_starting_soon
-focus_window_available
-schedule_overloaded
-```
-
----
-
-### Layer 6 — Widgets
-
-Expose signals to SagaOS widgets.
-
----
-
-### Layer 7 — AI Augmentation (Optional)
-
-Future optional components:
-
-- meeting summaries
-- task extraction
-- schedule suggestions
-
-These run asynchronously and are not required for core functionality.
-
----
-
-# Philosophy
-
-Hrafn transforms the terminal into a **personal operations console**.
-
-Instead of scattered tools and hidden schedules, users gain a unified view of their time and workload.
-
-Like Odin's ravens, Hrafn gathers signals from the digital world and returns them as intelligence.
-
----
+The installer creates the Hrafn virtualenv and attempts to install `khal` and
+`vdirsyncer` through the distro package manager mapping already used by SagaOS.

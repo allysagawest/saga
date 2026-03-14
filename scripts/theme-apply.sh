@@ -44,6 +44,20 @@ border_size="$(jq -r '.ui.border_size' "$THEME_JSON")"
 blur="$(jq -r '.ui.blur' "$THEME_JSON")"
 anim_windows="$(jq -r '.animations.windows' "$THEME_JSON")"
 anim_workspace="$(jq -r '.animations.workspace' "$THEME_JSON")"
+hrafn_agenda_time="$(jq -r '.hrafn.colors.agenda_time // .colors.secondary' "$THEME_JSON")"
+hrafn_agenda_title="$(jq -r '.hrafn.colors.agenda_title // .colors.text' "$THEME_JSON")"
+hrafn_task="$(jq -r '.hrafn.colors.task // .colors.success' "$THEME_JSON")"
+hrafn_empty="$(jq -r '.hrafn.colors.empty // .colors["text-muted"]' "$THEME_JSON")"
+hrafn_meeting_soon="$(jq -r '.hrafn.colors.meeting_starting_soon // .colors.primary' "$THEME_JSON")"
+hrafn_meeting_live="$(jq -r '.hrafn.colors.meeting_live // .colors.success' "$THEME_JSON")"
+hrafn_tasks_due="$(jq -r '.hrafn.colors.tasks_due_today // .colors.danger' "$THEME_JSON")"
+hrafn_focus="$(jq -r '.hrafn.colors.focus_window_available // .colors.accent' "$THEME_JSON")"
+hrafn_sync_status="$(jq -r '.hrafn.colors.sync_status // .colors.secondary' "$THEME_JSON")"
+hrafn_error="$(jq -r '.hrafn.colors.error // .colors.danger' "$THEME_JSON")"
+hrafn_warning="$(jq -r '.hrafn.colors.warning // .colors.accent' "$THEME_JSON")"
+hrafn_font_ui="$(jq -r '.hrafn.fonts.ui // .fonts.ui' "$THEME_JSON")"
+hrafn_font_display="$(jq -r '.hrafn.fonts.display // .fonts.ui' "$THEME_JSON")"
+hrafn_font_size="$(jq -r '.hrafn.fonts.size // .fonts.size' "$THEME_JSON")"
 
 cat > "$THEME_DIR/variables.css" <<CSS
 :root {
@@ -144,6 +158,31 @@ misc {
   vfr = true
 }
 HYPR
+
+mkdir -p "$HOME/.config/hrafn"
+cat > "$HOME/.config/hrafn/theme.json" <<JSON
+{
+  "theme": "$THEME_NAME",
+  "colors": {
+    "agenda_time": "$hrafn_agenda_time",
+    "agenda_title": "$hrafn_agenda_title",
+    "task": "$hrafn_task",
+    "empty": "$hrafn_empty",
+    "meeting_starting_soon": "$hrafn_meeting_soon",
+    "meeting_live": "$hrafn_meeting_live",
+    "tasks_due_today": "$hrafn_tasks_due",
+    "focus_window_available": "$hrafn_focus",
+    "sync_status": "$hrafn_sync_status",
+    "error": "$hrafn_error",
+    "warning": "$hrafn_warning"
+  },
+  "fonts": {
+    "ui": "$hrafn_font_ui",
+    "display": "$hrafn_font_display",
+    "size": $hrafn_font_size
+  }
+}
+JSON
 
 if [[ -d "$HOME/.local/share/saga" && -f "$HOME/.local/share/saga/state.json" ]] && command -v jq >/dev/null 2>&1; then
   tmp="$(mktemp)"

@@ -1,0 +1,25 @@
+[build-system]
+requires = ["setuptools>=69", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "hrafn"
+version = "0.1.0"
+description = "SagaOS terminal-first operational awareness engine"
+readme = "README.md"
+requires-python = ">=3.12"
+dependencies = [
+  "typer>=0.12,<1.0",
+  "python-dateutil>=2.9.0,<3.0",
+  "textual>=0.58,<1.0",
+]
+
+[project.scripts]
+hrafn = "cli.main:app"
+
+[tool.setuptools]
+include-package-data = false
+
+[tool.setuptools.packages.find]
+include = ["cli*"]
+namespaces = true
